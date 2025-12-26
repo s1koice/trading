@@ -2,19 +2,20 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Trading Journal</title>
 
   <style>
     :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; }
     body { margin: 0; background:#0b0f19; color:#e7eaf3; }
-    header { padding: 20px 16px; border-bottom: 1px solid #1b2440; position: sticky; top:0; background:#0b0f19; z-index: 5; }
+    header { padding: 18px 16px; border-bottom: 1px solid #1b2440; position: sticky; top:0; background:#0b0f19; z-index: 5; }
     h1 { margin: 0 0 6px; font-size: 18px; }
     .sub { color:#aab3d3; font-size: 13px; }
 
     main { max-width: 1150px; margin: 0 auto; padding: 16px; display: grid; gap: 16px; grid-template-columns: 380px 1fr; }
     .card { background:#0f1629; border:1px solid #1b2440; border-radius: 16px; padding: 14px; }
     .card h2 { margin: 0 0 10px; font-size: 14px; color:#cfd6f5; }
+    .muted { color:#aab3d3; font-size: 12px; }
 
     label { display:block; font-size: 12px; color:#aab3d3; margin: 10px 0 6px; }
     input, select, textarea, button {
@@ -28,14 +29,8 @@
 
     .row { display:grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .row3 { display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
-
     .btnRow { display:flex; gap: 10px; }
     .btnRow button { width: auto; flex: 1; }
-
-    .muted { color:#aab3d3; font-size: 12px; }
-    .ok { color:#6ee7b7; }
-    .warn { color:#fbbf24; }
-    .bad { color:#fb7185; }
 
     .kpi { display:grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
     .kpi .box { background:#0b1020; border:1px solid #223057; border-radius: 14px; padding: 10px; }
@@ -45,18 +40,34 @@
     th, td { padding: 10px; border-bottom:1px solid #1b2440; vertical-align: top; font-size: 13px; }
     th { text-align:left; color:#cfd6f5; background:#0b1020; position: sticky; top: 74px; z-index: 3; }
     tr:hover td { background:#0b1020; }
+    .right { text-align:right; }
 
     .tag { display:inline-block; padding: 2px 8px; border-radius: 999px; border:1px solid #223057; font-size: 12px; color:#cfd6f5; }
     .pill { display:inline-flex; gap:8px; align-items:center; flex-wrap: wrap; }
-    .right { text-align:right; }
+
+    .divider { border:none; border-top:1px solid #1b2440; margin:14px 0; }
 
     .toast {
       position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%);
       background: #0b1020; border:1px solid #223057; border-radius: 14px; padding: 10px 12px;
-      min-width: 260px; max-width: 92vw; display:none; z-index: 10;
+      min-width: 260px; max-width: 92vw; display:none; z-index: 9999;
     }
+    .ok { color:#6ee7b7; }
+    .warn { color:#fbbf24; }
+    .bad { color:#fb7185; }
 
-    .divider { border:none; border-top:1px solid #1b2440; margin:14px 0; }
+    /* Debug bar */
+    .debugbar {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 9998;
+      padding: 10px 12px; background:#0b1020; border-bottom:1px solid #223057;
+      font: 14px system-ui; color:#e7eaf3;
+    }
+    .debugbox {
+      margin-top: 10px; padding: 10px 12px; border-radius: 14px;
+      background:#0b1020; border:1px solid #223057;
+      max-height: 220px; overflow:auto; white-space: pre-wrap; word-break: break-word;
+      font-size: 12px;
+    }
 
     @media (max-width: 980px){
       main { grid-template-columns: 1fr; }
@@ -64,8 +75,12 @@
     }
   </style>
 
-  <!-- ✅ Supabase UMD build (важно!) -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <!-- ✅ Supabase UMD (чтобы был window.supabase) -->
+  <script
+    src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"
+    onload="window.__SB_OK=true;"
+    onerror="window.__SB_OK=false;alert('❌ Не загрузился Supabase JS (CDN). Отключи AdBlock/фильтры или дай знать — сделаю версию без CDN.');">
+  </script>
 </head>
 
 <body>
@@ -75,7 +90,6 @@
 </header>
 
 <main>
-  <!-- LEFT -->
   <section class="card">
     <h2>🔐 Аккаунт</h2>
 
@@ -171,9 +185,10 @@
     <p class="muted" style="margin-top:10px;">
       ⚠️ Сначала <b>войти</b> или <b>зарегистрироваться</b>. Иначе запись не сохранится.
     </p>
+
+    <div class="debugbox" id="debugLog"></div>
   </section>
 
-  <!-- RIGHT -->
   <section class="card">
     <h2>📊 Дашборд</h2>
     <div class="kpi" id="kpi"></div>
@@ -233,12 +248,18 @@
     }[m]));
   }
 
-  function toast(msg, kind = "ok") {
-    const t = $("toast");
-    t.style.display = "block";
-    t.innerHTML = `<span class="${kind}">${escapeHtml(msg)}</span>`;
+  function log(msg){
+    const box = $("debugLog");
+    const t = new Date().toLocaleTimeString();
+    box.textContent = `[${t}] ${msg}\n` + box.textContent;
+  }
+
+  function toast(msg, kind="ok"){
+    const el = $("toast");
+    el.style.display = "block";
+    el.innerHTML = `<span class="${kind}">${escapeHtml(msg)}</span>`;
     clearTimeout(window.__toastTimer);
-    window.__toastTimer = setTimeout(() => (t.style.display = "none"), 2800);
+    window.__toastTimer = setTimeout(()=> el.style.display="none", 2800);
   }
 
   function todayISO(){
@@ -264,14 +285,25 @@
   }
 
   // =========================
-  // SUPABASE INIT (важно!)
+  // DEBUG BAR (видно всегда)
+  // =========================
+  function addDebugBar(){
+    const bar = document.createElement("div");
+    bar.className = "debugbar";
+    const sb = window.__SB_OK ? "OK" : "НЕ ЗАГРУЖЕН";
+    bar.innerHTML = `✅ JS работает. Supabase: <b>${sb}</b> · <span class="muted">Если кнопки не реагируют — значит JS не выполняется или файл не обновился.</span>`;
+    document.body.appendChild(bar);
+    document.body.style.paddingTop = "44px";
+  }
+
+  // =========================
+  // SUPABASE INIT
   // =========================
   const SB = window.supabase;
-  if (!SB || !SB.createClient) {
-    // Если это выскочило — CDN не загрузился, и кнопки будут "мертвы"
-    alert("Supabase JS не загрузился. Проверь подключение скрипта и сделай Ctrl+F5 / Cmd+Shift+R.");
+  let supabase = null;
+  if (SB && SB.createClient) {
+    supabase = SB.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   }
-  const supabase = SB.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
   // =========================
   // STATE
@@ -283,92 +315,127 @@
   // AUTH
   // =========================
   async function refreshAuth(){
+    if(!supabase){
+      $("authState").innerHTML = `❌ <span class="bad">Supabase JS не инициализирован.</span>`;
+      setFormEnabled(false);
+      $("logoutBtn").disabled = true;
+      log("Supabase не инициализирован (supabase == null).");
+      return;
+    }
+
     try {
       const { data, error } = await supabase.auth.getUser();
       if (error) throw error;
-
       currentUser = data.user || null;
 
-      if (currentUser) {
-        $("authState").innerHTML = `✅ <span class="ok">Вход выполнен:</span> ${escapeHtml(currentUser.email)}`;
+      if(currentUser){
+        $("authState").innerHTML = `✅ <span class="ok">Вход:</span> ${escapeHtml(currentUser.email)}`;
         $("logoutBtn").disabled = false;
         setFormEnabled(true);
+        log("Auth OK: user=" + currentUser.email);
       } else {
         $("authState").innerHTML = `⚠️ <span class="warn">Не авторизован.</span> Войди или зарегистрируйся.`;
         $("logoutBtn").disabled = true;
         setFormEnabled(false);
+        log("Auth: user=null");
       }
-    } catch (e) {
-      currentUser = null;
+    } catch(e){
       $("authState").innerHTML = `❌ <span class="bad">Auth ошибка:</span> ${escapeHtml(e.message || e)}`;
       $("logoutBtn").disabled = true;
       setFormEnabled(false);
+      log("Auth error: " + (e.message || e));
     }
   }
 
   async function login(){
+    toast("Клик: Войти", "warn");
+    log("Нажали Войти.");
+
+    if(!supabase){
+      alert("Supabase не загрузился (CDN/AdBlock).");
+      return;
+    }
+
     const email = $("email").value.trim();
     const password = $("password").value;
-
-    if(!email || !password) { toast("Заполни email и пароль", "warn"); return; }
+    if(!email || !password){
+      toast("Заполни email и пароль", "warn");
+      log("Пустой email/пароль.");
+      return;
+    }
 
     $("loginBtn").disabled = true;
-    try {
+    try{
       const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) throw error;
+      if(error) throw error;
 
+      toast("Вход выполнен", "ok");
+      log("Вход OK.");
       await refreshAuth();
       await loadFromDB();
-      toast("Вход выполнен", "ok");
-    } catch (e) {
+    } catch(e){
       toast(e.message || "Ошибка входа", "bad");
+      log("Ошибка входа: " + (e.message || e));
     } finally {
       $("loginBtn").disabled = false;
     }
   }
 
   async function signup(){
+    toast("Клик: Регистрация", "warn");
+    log("Нажали Регистрация.");
+
+    if(!supabase){
+      alert("Supabase не загрузился (CDN/AdBlock).");
+      return;
+    }
+
     const email = $("email").value.trim();
     const password = $("password").value;
-
-    if(!email || !password) { toast("Заполни email и пароль", "warn"); return; }
+    if(!email || !password){
+      toast("Заполни email и пароль", "warn");
+      log("Пустой email/пароль.");
+      return;
+    }
 
     $("signupBtn").disabled = true;
-    try {
+    try{
       const { data, error } = await supabase.auth.signUp({ email, password });
-      if (error) throw error;
+      if(error) throw error;
 
-      // В зависимости от настроек confirmation, пользователь может быть создан, но не залогинен
+      toast("Регистрация создана. Если надо — проверь почту.", "ok");
+      log("Signup OK. user=" + (data?.user?.email || "null (может требовать подтверждение)"));
+
       await refreshAuth();
       await loadFromDB();
-
-      if (data?.user) {
-        toast("Регистрация создана. Если требуется подтверждение — проверь почту.", "ok");
-      } else {
-        toast("Регистрация создана. Проверь почту (подтверждение).", "warn");
-      }
-    } catch (e) {
+    } catch(e){
       toast(e.message || "Ошибка регистрации", "bad");
+      log("Ошибка регистрации: " + (e.message || e));
     } finally {
       $("signupBtn").disabled = false;
     }
   }
 
   async function logout(){
-    try {
+    toast("Клик: Выйти", "warn");
+    log("Нажали Выйти.");
+
+    if(!supabase) return;
+    try{
       await supabase.auth.signOut();
-      await refreshAuth();
       state.entries = [];
       render();
+      await refreshAuth();
       toast("Выход выполнен", "ok");
-    } catch (e) {
+      log("Выход OK.");
+    } catch(e){
       toast(e.message || "Ошибка выхода", "bad");
+      log("Ошибка выхода: " + (e.message || e));
     }
   }
 
   // =========================
-  // DB (table: entries)
-  // ВАЖНО: таблица должна существовать + RLS политики
+  // DB
   // =========================
   function mapFromDB(x){
     return {
@@ -392,10 +459,12 @@
       $("listState").textContent = "Нет данных: нужно войти.";
       state.entries = [];
       render();
+      log("loadFromDB: user=null");
       return;
     }
 
     $("listState").textContent = "Загрузка…";
+    log("loadFromDB: start");
 
     const { data, error } = await supabase
       .from("entries")
@@ -403,21 +472,24 @@
       .order("date", { ascending: false })
       .order("created_at", { ascending: false });
 
-    if (error){
+    if(error){
       $("listState").innerHTML = `<span class="bad">Ошибка загрузки:</span> ${escapeHtml(error.message)}`;
       state.entries = [];
       render();
+      log("loadFromDB error: " + error.message);
       return;
     }
 
     state.entries = (data || []).map(mapFromDB);
     $("listState").textContent = `Загружено записей: ${state.entries.length}`;
+    log("loadFromDB OK: " + state.entries.length);
     render();
   }
 
   async function insertToDB(entry){
     if(!currentUser){
-      toast("Сначала войди, чтобы сохранять в БД", "warn");
+      toast("Сначала войди", "warn");
+      log("insertToDB: user=null");
       return false;
     }
 
@@ -436,20 +508,28 @@
     };
 
     const { error } = await supabase.from("entries").insert(payload);
-    if (error){
+    if(error){
       toast("Ошибка сохранения: " + error.message, "bad");
+      log("insertToDB error: " + error.message);
       return false;
     }
+    log("insertToDB OK");
     return true;
   }
 
   async function deleteFromDB(id){
     const { error } = await supabase.from("entries").delete().eq("id", id);
-    if (error) toast("Ошибка удаления: " + error.message, "bad");
+    if(error){
+      toast("Ошибка удаления: " + error.message, "bad");
+      log("deleteFromDB error: " + error.message);
+      return false;
+    }
+    log("deleteFromDB OK");
+    return true;
   }
 
   // =========================
-  // UI LOGIC
+  // UI
   // =========================
   function resetForm(){
     $("date").value = todayISO();
@@ -468,9 +548,7 @@
     const q = state.q.trim().toLowerCase();
     return state.entries.filter(e => {
       const okType = !state.filterType || e.type === state.filterType;
-      const hay = [
-        e.symbol, e.setup, e.side, e.emotion, e.context, e.lessons, e.type, e.date
-      ].join(" ").toLowerCase();
+      const hay = [e.symbol, e.setup, e.side, e.emotion, e.context, e.lessons, e.type, e.date].join(" ").toLowerCase();
       const okQ = !q || hay.includes(q);
       return okType && okQ;
     });
@@ -512,9 +590,7 @@
           </div>
         </td>
         <td class="right">${e.type==="trade" ? escapeHtml(e.resultR ?? "—") : "—"}</td>
-        <td>
-          <button onclick="window.__del('${e.id}')">Удалить</button>
-        </td>
+        <td><button onclick="window.__del('${e.id}')">Удалить</button></td>
       </tr>
     `).join("");
 
@@ -524,6 +600,9 @@
   }
 
   async function addEntry(){
+    toast("Клик: Сохранить", "warn");
+    log("Нажали Сохранить.");
+
     const entry = {
       date: $("date").value || todayISO(),
       type: $("type").value,
@@ -537,17 +616,20 @@
       lessons: $("lessons").value.trim()
     };
 
-    if (!entry.type) { toast("Выбери тип", "warn"); return; }
-    if (entry.type === "trade" && !entry.symbol) { toast("Для сделки укажи инструмент (symbol)", "warn"); return; }
+    if(entry.type === "trade" && !entry.symbol){
+      toast("Для сделки укажи инструмент", "warn");
+      log("Валидация: пустой symbol.");
+      return;
+    }
 
     $("saveBtn").disabled = true;
     const ok = await insertToDB(entry);
     $("saveBtn").disabled = false;
 
     if(ok){
-      await loadFromDB();
       resetForm();
-      toast("Сохранено в базе данных", "ok");
+      await loadFromDB();
+      toast("Сохранено в БД", "ok");
     }
   }
 
@@ -561,10 +643,36 @@
   // =========================
   // INIT
   // =========================
-  (async () => {
+  document.addEventListener("DOMContentLoaded", async () => {
+    addDebugBar();
     $("date").value = todayISO();
     setFormEnabled(false);
     $("logoutBtn").disabled = true;
+    log("DOMContentLoaded: JS запустился.");
 
-    // обработчики
-    $("loginBtn").addEventListener("click", () => { toa
+    // ВАЖНО: эти обработчики должны дать реакцию всегда
+    $("loginBtn").addEventListener("click", login);
+    $("signupBtn").addEventListener("click", signup);
+    $("logoutBtn").addEventListener("click", logout);
+    $("reloadBtn").addEventListener("click", () => { toast("Клик: Обновить", "warn"); loadFromDB(); });
+    $("saveBtn").addEventListener("click", addEntry);
+    $("resetBtn").addEventListener("click", () => { toast("Форма очищена", "ok"); resetForm(); });
+
+    $("q").addEventListener("input", (e)=>{ state.q = e.target.value; render(); });
+    $("filterType").addEventListener("change", (e)=>{ state.filterType = e.target.value; render(); });
+
+    // Базовая проверка supabase
+    if(!supabase){
+      $("authState").innerHTML = `❌ <span class="bad">Supabase JS не инициализирован.</span> Скорее всего блокируется CDN.`;
+      log("supabase == null (CDN blocked?)");
+      return;
+    }
+
+    await refreshAuth();
+    await loadFromDB();
+    render();
+  });
+</script>
+
+</body>
+</html>
