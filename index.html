@@ -15,17 +15,12 @@
     main { max-width: 1150px; margin: 0 auto; padding: 16px; display: grid; gap: 16px; grid-template-columns: 380px 1fr; }
     .card { background:#0f1629; border:1px solid #1b2440; border-radius: 16px; padding: 14px; }
     .card h2 { margin: 0 0 10px; font-size: 14px; color:#cfd6f5; }
-    .muted { color:#aab3d3; font-size: 12px; }
-    .ok { color:#6ee7b7; }
-    .warn { color:#fbbf24; }
-    .bad { color:#fb7185; }
 
     label { display:block; font-size: 12px; color:#aab3d3; margin: 10px 0 6px; }
     input, select, textarea, button {
       width: 100%; box-sizing: border-box; border-radius: 12px; border: 1px solid #223057;
       background:#0b1020; color:#e7eaf3; padding: 10px 12px; font-size: 14px;
     }
-    input:disabled, select:disabled, textarea:disabled { opacity: 0.6; cursor: not-allowed; }
     textarea { min-height: 88px; resize: vertical; }
     button { cursor:pointer; border: 1px solid #2d3d6f; background:#111a33; }
     button:hover { filter: brightness(1.05); }
@@ -33,24 +28,27 @@
 
     .row { display:grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .row3 { display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+
     .btnRow { display:flex; gap: 10px; }
     .btnRow button { width: auto; flex: 1; }
+
+    .muted { color:#aab3d3; font-size: 12px; }
+    .ok { color:#6ee7b7; }
+    .warn { color:#fbbf24; }
+    .bad { color:#fb7185; }
 
     .kpi { display:grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
     .kpi .box { background:#0b1020; border:1px solid #223057; border-radius: 14px; padding: 10px; }
     .kpi .v { font-size: 18px; margin-top: 4px; }
 
-    .divider { border:none; border-top:1px solid #1b2440; margin:14px 0; }
-
     table { width: 100%; border-collapse: collapse; overflow: hidden; border-radius: 14px; border:1px solid #1b2440; }
     th, td { padding: 10px; border-bottom:1px solid #1b2440; vertical-align: top; font-size: 13px; }
     th { text-align:left; color:#cfd6f5; background:#0b1020; position: sticky; top: 74px; z-index: 3; }
     tr:hover td { background:#0b1020; }
-    .right { text-align:right; }
+
     .tag { display:inline-block; padding: 2px 8px; border-radius: 999px; border:1px solid #223057; font-size: 12px; color:#cfd6f5; }
     .pill { display:inline-flex; gap:8px; align-items:center; flex-wrap: wrap; }
-    .actions { display:flex; gap:8px; }
-    .actions button { padding: 8px 10px; }
+    .right { text-align:right; }
 
     .toast {
       position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%);
@@ -58,23 +56,26 @@
       min-width: 260px; max-width: 92vw; display:none; z-index: 10;
     }
 
+    .divider { border:none; border-top:1px solid #1b2440; margin:14px 0; }
+
     @media (max-width: 980px){
       main { grid-template-columns: 1fr; }
       th { top: 0; position: static; }
     }
   </style>
 
-  <!-- Supabase JS -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- ✅ Supabase UMD build (важно!) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 </head>
 
 <body>
 <header>
   <h1>Trading Journal</h1>
-  <div class="sub">Журнал сделок + анализ рынка — хранение в базе данных (Supabase Postgres)</div>
+  <div class="sub">Журнал сделок + анализ рынка — сохранение в базе данных (Supabase Postgres)</div>
 </header>
 
 <main>
+  <!-- LEFT -->
   <section class="card">
     <h2>🔐 Аккаунт</h2>
 
@@ -94,7 +95,7 @@
       <button id="reloadBtn" type="button">Обновить записи</button>
     </div>
 
-    <div class="muted" id="authState" style="margin-top:10px;">Проверяю авторизацию…</div>
+    <div class="muted" id="authState" style="margin-top:10px;">Загрузка…</div>
 
     <hr class="divider">
 
@@ -168,10 +169,11 @@
     </div>
 
     <p class="muted" style="margin-top:10px;">
-      ⚠️ Если ты не вошёл — запись не сохранится. Сначала <b>Войти</b> / <b>Регистрация</b>.
+      ⚠️ Сначала <b>войти</b> или <b>зарегистрироваться</b>. Иначе запись не сохранится.
     </p>
   </section>
 
+  <!-- RIGHT -->
   <section class="card">
     <h2>📊 Дашборд</h2>
     <div class="kpi" id="kpi"></div>
@@ -215,29 +217,28 @@
 
 <script>
   // =========================
-  // 1) SUPABASE CONFIG
+  // CONFIG (твои данные)
   // =========================
   const SUPABASE_URL = "https://lchstbkuizgablzdczgf.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxjaHN0Ymt1aXpnYWJsemRjemdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY3NzE2MDQsImV4cCI6MjA4MjM0NzYwNH0.0HnmhHZSDNktliI1ieg7F_ehVuvDp3nwh8vhFJM6eRg";
-  const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
   // =========================
-  // 2) HELPERS
+  // HELPERS
   // =========================
   const $ = (id) => document.getElementById(id);
+
+  function escapeHtml(s){
+    return String(s ?? "").replace(/[&<>"']/g, m => ({
+      "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+    }[m]));
+  }
 
   function toast(msg, kind = "ok") {
     const t = $("toast");
     t.style.display = "block";
     t.innerHTML = `<span class="${kind}">${escapeHtml(msg)}</span>`;
     clearTimeout(window.__toastTimer);
-    window.__toastTimer = setTimeout(() => (t.style.display = "none"), 2600);
-  }
-
-  function escapeHtml(s){
-    return String(s ?? "").replace(/[&<>"']/g, m => ({
-      "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
-    }[m]));
+    window.__toastTimer = setTimeout(() => (t.style.display = "none"), 2800);
   }
 
   function todayISO(){
@@ -263,78 +264,111 @@
   }
 
   // =========================
-  // 3) STATE
+  // SUPABASE INIT (важно!)
   // =========================
-  const state = {
-    entries: [],
-    filterType: "",
-    q: ""
-  };
+  const SB = window.supabase;
+  if (!SB || !SB.createClient) {
+    // Если это выскочило — CDN не загрузился, и кнопки будут "мертвы"
+    alert("Supabase JS не загрузился. Проверь подключение скрипта и сделай Ctrl+F5 / Cmd+Shift+R.");
+  }
+  const supabase = SB.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+  // =========================
+  // STATE
+  // =========================
+  const state = { entries: [], filterType: "", q: "" };
   let currentUser = null;
 
   // =========================
-  // 4) AUTH
+  // AUTH
   // =========================
   async function refreshAuth(){
-    const { data, error } = await supabase.auth.getUser();
-    if (error) {
+    try {
+      const { data, error } = await supabase.auth.getUser();
+      if (error) throw error;
+
+      currentUser = data.user || null;
+
+      if (currentUser) {
+        $("authState").innerHTML = `✅ <span class="ok">Вход выполнен:</span> ${escapeHtml(currentUser.email)}`;
+        $("logoutBtn").disabled = false;
+        setFormEnabled(true);
+      } else {
+        $("authState").innerHTML = `⚠️ <span class="warn">Не авторизован.</span> Войди или зарегистрируйся.`;
+        $("logoutBtn").disabled = true;
+        setFormEnabled(false);
+      }
+    } catch (e) {
       currentUser = null;
-      $("authState").innerHTML = `<span class="bad">Ошибка auth:</span> ${escapeHtml(error.message)}`;
-      setFormEnabled(false);
-      return;
-    }
-
-    currentUser = data.user || null;
-
-    if (currentUser) {
-      $("authState").innerHTML = `✅ <span class="ok">Вход выполнен:</span> ${escapeHtml(currentUser.email)}`;
-      setFormEnabled(true);
-      $("logoutBtn").disabled = false;
-    } else {
-      $("authState").innerHTML = `⚠️ <span class="warn">Не авторизован.</span> Войди или зарегистрируйся.`;
-      setFormEnabled(false);
+      $("authState").innerHTML = `❌ <span class="bad">Auth ошибка:</span> ${escapeHtml(e.message || e)}`;
       $("logoutBtn").disabled = true;
+      setFormEnabled(false);
     }
   }
 
   async function login(){
     const email = $("email").value.trim();
     const password = $("password").value;
+
     if(!email || !password) { toast("Заполни email и пароль", "warn"); return; }
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) { toast(error.message, "bad"); return; }
+    $("loginBtn").disabled = true;
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
 
-    await refreshAuth();
-    await loadFromDB();
-    toast("Вход выполнен", "ok");
+      await refreshAuth();
+      await loadFromDB();
+      toast("Вход выполнен", "ok");
+    } catch (e) {
+      toast(e.message || "Ошибка входа", "bad");
+    } finally {
+      $("loginBtn").disabled = false;
+    }
   }
 
   async function signup(){
     const email = $("email").value.trim();
     const password = $("password").value;
+
     if(!email || !password) { toast("Заполни email и пароль", "warn"); return; }
 
-    const { error } = await supabase.auth.signUp({ email, password });
-    if (error) { toast(error.message, "bad"); return; }
+    $("signupBtn").disabled = true;
+    try {
+      const { data, error } = await supabase.auth.signUp({ email, password });
+      if (error) throw error;
 
-    // В зависимости от настроек email confirmation, пользователь может быть не залогинен сразу
-    await refreshAuth();
-    await loadFromDB();
-    toast("Регистрация создана. Если включено подтверждение email — проверь почту.", "ok");
+      // В зависимости от настроек confirmation, пользователь может быть создан, но не залогинен
+      await refreshAuth();
+      await loadFromDB();
+
+      if (data?.user) {
+        toast("Регистрация создана. Если требуется подтверждение — проверь почту.", "ok");
+      } else {
+        toast("Регистрация создана. Проверь почту (подтверждение).", "warn");
+      }
+    } catch (e) {
+      toast(e.message || "Ошибка регистрации", "bad");
+    } finally {
+      $("signupBtn").disabled = false;
+    }
   }
 
   async function logout(){
-    await supabase.auth.signOut();
-    await refreshAuth();
-    state.entries = [];
-    render();
-    toast("Выход выполнен", "ok");
+    try {
+      await supabase.auth.signOut();
+      await refreshAuth();
+      state.entries = [];
+      render();
+      toast("Выход выполнен", "ok");
+    } catch (e) {
+      toast(e.message || "Ошибка выхода", "bad");
+    }
   }
 
   // =========================
-  // 5) DB (entries)
+  // DB (table: entries)
+  // ВАЖНО: таблица должна существовать + RLS политики
   // =========================
   function mapFromDB(x){
     return {
@@ -406,18 +440,16 @@
       toast("Ошибка сохранения: " + error.message, "bad");
       return false;
     }
-
     return true;
   }
 
   async function deleteFromDB(id){
-    if(!currentUser) return;
     const { error } = await supabase.from("entries").delete().eq("id", id);
     if (error) toast("Ошибка удаления: " + error.message, "bad");
   }
 
   // =========================
-  // 6) UI LOGIC
+  // UI LOGIC
   // =========================
   function resetForm(){
     $("date").value = todayISO();
@@ -445,11 +477,9 @@
   }
 
   function render(){
-    // KPI
     const trades = state.entries.filter(e => e.type === "trade");
     const totalR = trades.reduce((s,e)=> s + (Number(e.resultR) || 0), 0);
     const wins = trades.filter(e => (Number(e.resultR) || 0) > 0).length;
-    const losses = trades.filter(e => (Number(e.resultR) || 0) < 0).length;
     const winrate = trades.length ? Math.round((wins / trades.length) * 100) : 0;
 
     const kpi = [
@@ -458,5 +488,83 @@
       {k:"Winrate", v: winrate + "%"},
       {k:"Суммарно R", v: (Math.round(totalR*10)/10).toString()}
     ];
+    $("kpi").innerHTML = kpi.map(x => `
+      <div class="box">
+        <div class="muted">${escapeHtml(x.k)}</div>
+        <div class="v">${escapeHtml(x.v)}</div>
+      </div>
+    `).join("");
 
-    $("kpi").innerHTML = kpi.map(x =>
+    const rows = filtered();
+    $("rows").innerHTML = rows.map(e => `
+      <tr>
+        <td>${escapeHtml(e.date || "")}</td>
+        <td><span class="tag">${escapeHtml(formatType(e.type))}</span></td>
+        <td>
+          <div class="pill">
+            <strong>${escapeHtml(e.symbol || "—")}</strong>
+            ${e.side ? `<span class="tag">${escapeHtml(e.side.toUpperCase())}</span>` : ""}
+            ${e.setup ? `<span class="tag">${escapeHtml(e.setup)}</span>` : ""}
+            ${e.emotion ? `<span class="tag">${escapeHtml(e.emotion)}</span>` : ""}
+          </div>
+          <div class="muted" style="margin-top:6px;">
+            ${escapeHtml((e.context || e.lessons || "").slice(0, 220))}${(e.context||e.lessons||"").length>220?"…":""}
+          </div>
+        </td>
+        <td class="right">${e.type==="trade" ? escapeHtml(e.resultR ?? "—") : "—"}</td>
+        <td>
+          <button onclick="window.__del('${e.id}')">Удалить</button>
+        </td>
+      </tr>
+    `).join("");
+
+    if(currentUser){
+      $("listState").textContent = `Показано: ${rows.length} (всего: ${state.entries.length})`;
+    }
+  }
+
+  async function addEntry(){
+    const entry = {
+      date: $("date").value || todayISO(),
+      type: $("type").value,
+      symbol: $("symbol").value.trim(),
+      setup: $("setup").value.trim(),
+      side: $("side").value,
+      risk: numOrNull($("risk").value),
+      resultR: numOrNull($("resultR").value),
+      emotion: $("emotion").value,
+      context: $("context").value.trim(),
+      lessons: $("lessons").value.trim()
+    };
+
+    if (!entry.type) { toast("Выбери тип", "warn"); return; }
+    if (entry.type === "trade" && !entry.symbol) { toast("Для сделки укажи инструмент (symbol)", "warn"); return; }
+
+    $("saveBtn").disabled = true;
+    const ok = await insertToDB(entry);
+    $("saveBtn").disabled = false;
+
+    if(ok){
+      await loadFromDB();
+      resetForm();
+      toast("Сохранено в базе данных", "ok");
+    }
+  }
+
+  async function del(id){
+    if(!confirm("Удалить запись?")) return;
+    await deleteFromDB(id);
+    await loadFromDB();
+  }
+  window.__del = del;
+
+  // =========================
+  // INIT
+  // =========================
+  (async () => {
+    $("date").value = todayISO();
+    setFormEnabled(false);
+    $("logoutBtn").disabled = true;
+
+    // обработчики
+    $("loginBtn").addEventListener("click", () => { toa
