@@ -1,265 +1,101 @@
 <!doctype html>
 <html lang="ru">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
 
-  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
-  <meta http-equiv="Pragma" content="no-cache">
-  <meta http-equiv="Expires" content="0">
+<title>Trading Journal</title>
 
-  <title>Trading Journal</title>
+<style>
+:root {
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;
+}
 
-  <style>
-    :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; }
-    body { margin: 0; background:#0b0f19; color:#e7eaf3; }
-    header { padding: 18px 16px; border-bottom: 1px solid #1b2440; position: sticky; top:0; background:#0b0f19; z-index: 5; }
-    h1 { margin: 0 0 6px; font-size: 18px; }
-    .sub { color:#aab3d3; font-size: 13px; display:flex; gap:10px; flex-wrap: wrap; align-items:center; }
-    .badge { display:inline-block; padding: 2px 10px; border-radius: 999px; border:1px solid #223057; background:#0b1020; color:#cfd6f5; font-size: 12px; }
+body {
+  margin: 0;
+  background:#0b0f19;
+  color:#e7eaf3;
+}
 
-    main { max-width: 1150px; margin: 0 auto; padding: 16px; display: grid; gap: 16px; grid-template-columns: 380px 1fr; }
-    .card { background:#0f1629; border:1px solid #1b2440; border-radius: 16px; padding: 14px; }
-    .card h2 { margin: 0 0 10px; font-size: 14px; color:#cfd6f5; }
-    .muted { color:#aab3d3; font-size: 12px; }
+header {
+  padding: 18px 16px;
+  border-bottom: 1px solid #1b2440;
+  background:#0b0f19;
+}
 
-    label { display:block; font-size: 12px; color:#aab3d3; margin: 10px 0 6px; }
-    input, select, textarea, button {
-      width: 100%; box-sizing: border-box; border-radius: 12px; border: 1px solid #223057;
-      background:#0b1020; color:#e7eaf3; padding: 10px 12px; font-size: 14px;
-    }
-    textarea { min-height: 88px; resize: vertical; }
-    button { cursor:pointer; border: 1px solid #2d3d6f; background:#111a33; }
-    button:hover { filter: brightness(1.05); }
-    button:disabled { opacity: 0.55; cursor: not-allowed; }
+h1 {
+  margin: 0 0 6px;
+  font-size: 18px;
+}
 
-    .row { display:grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    .row3 { display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
-    .btnRow { display:flex; gap: 10px; }
-    .btnRow button { width: auto; flex: 1; }
+.sub {
+  color:#aab3d3;
+  font-size: 13px;
+  display:flex;
+  gap:10px;
+  flex-wrap: wrap;
+}
 
-    .kpi { display:grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
-    .kpi .box { background:#0b1020; border:1px solid #223057; border-radius: 14px; padding: 10px; }
-    .kpi .v { font-size: 18px; margin-top: 4px; }
+.badge {
+  padding: 4px 10px;
+  border-radius: 999px;
+  border:1px solid #223057;
+  background:#0b1020;
+  font-size: 12px;
+}
 
-    table { width: 100%; border-collapse: collapse; overflow: hidden; border-radius: 14px; border:1px solid #1b2440; }
-    th, td { padding: 10px; border-bottom:1px solid #1b2440; vertical-align: top; font-size: 13px; }
-    th { text-align:left; color:#cfd6f5; background:#0b1020; position: sticky; top: 74px; z-index: 3; }
-    tr:hover td { background:#0b1020; }
-    .right { text-align:right; }
+/* ===== layout ===== */
+main {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 16px;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: 380px 1fr;
+}
 
-    .tag { display:inline-block; padding: 2px 8px; border-radius: 999px; border:1px solid #223057; font-size: 12px; color:#cfd6f5; }
-    .pill { display:inline-flex; gap:8px; align-items:center; flex-wrap: wrap; }
+.card {
+  background:#0f1629;
+  border:1px solid #1b2440;
+  border-radius: 16px;
+  padding: 14px;
+}
 
-    .divider { border:none; border-top:1px solid #1b2440; margin:14px 0; }
+@media (max-width: 980px){
+  main { grid-template-columns: 1fr; }
+}
 
-    .toast {
-      position: fixed; left: 50%; bottom: 62px; transform: translateX(-50%);
-      background: #0b1020; border:1px solid #223057; border-radius: 14px; padding: 10px 12px;
-      min-width: 260px; max-width: 92vw; display:none; z-index: 9999;
-    }
-    .ok { color:#6ee7b7; }
-    .warn { color:#fbbf24; }
-    .bad { color:#fb7185; }
+/* ===== form ===== */
+label {
+  display:block;
+  font-size: 12px;
+  color:#aab3d3;
+  margin: 10px 0 6px;
+}
 
-    .debugbox {
-      margin-top: 10px; padding: 10px 12px; border-radius: 14px;
-      background:#0b1020; border:1px solid #223057;
-      max-height: 220px; overflow:auto; white-space: pre-wrap; word-break: break-word;
-      font-size: 12px;
-    }
+input, select, textarea, button {
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid #223057;
+  background:#0b1020;
+  color:#e7eaf3;
+  padding: 10px 12px;
+  font-size: 14px;
+}
 
-    /* Видимая версия — HTML (работает даже без JS) */
-    .versionbar{
-      position: fixed; left: 10px; bottom: 10px; z-index: 9998;
-      padding: 8px 10px; border-radius: 12px;
-      background:#0b1020; border:1px solid #223057;
-      color:#cfd6f5; font-size: 12px;
-      opacity: 0.92;
-    }
+textarea {
+  resize: vertical;
+  min-height: 90px;
+}
 
-    .noscript{
-      margin: 12px 0;
-      padding: 10px 12px;
-      border-radius: 14px;
-      background:#2a1b1b;
-      border:1px solid #7a2d2d;
-      color:#ffd4d4;
-      font-size: 13px;
-    }
+button {
+  cursor:pointer;
+  background:#111a33;
+}
 
-    @media (max-width: 980px){
-      main { grid-template-columns: 1fr; }
-      th { top: 0; position: static; }
-    }
-  </style>
+.row { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.row3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; }
 
-  <!-- Supabase (внешний скрипт). ВАЖНО: без inline onload/onerror -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js" defer></script>
+.btnRow { display:flex; gap:10px; margin-top:10px; }
 
-  <!-- Наш код ТОЛЬКО внешним файлом (обходит блокировку inline JS) -->
-  <script src="./app.js" defer></script>
-</head>
-
-<body>
-<header>
-  <h1>Trading Journal</h1>
-  <div class="sub">
-    <span>Журнал сделок + анализ рынка — сохранение в базе данных (Supabase Postgres)</span>
-    <span class="badge" id="versionBadge">Версия: v2025-12-28 00:20 (IL)</span>
-    <span class="badge" id="sbBadge">Supabase: …</span>
-    <span class="badge" id="jsBadge">JS: …</span>
-  </div>
-</header>
-
-<main>
-  <section class="card">
-    <noscript>
-      <div class="noscript">
-        ❌ JavaScript отключён. Кнопки не будут работать, пока ты не включишь JS.
-      </div>
-    </noscript>
-
-    <h2>🔐 Аккаунт</h2>
-
-    <label>Email</label>
-    <input id="email" placeholder="you@email.com" autocomplete="email" />
-
-    <label>Пароль</label>
-    <input id="password" type="password" placeholder="••••••••" autocomplete="current-password" />
-
-    <div class="btnRow" style="margin-top:10px;">
-      <button id="loginBtn" type="button">Войти</button>
-      <button id="signupBtn" type="button">Регистрация</button>
-    </div>
-
-    <div class="btnRow" style="margin-top:10px;">
-      <button id="logoutBtn" type="button">Выйти</button>
-      <button id="reloadBtn" type="button">Обновить записи</button>
-    </div>
-
-    <div class="muted" id="authState" style="margin-top:10px;">Загрузка…</div>
-
-    <hr class="divider">
-
-    <h2>➕ Новая запись</h2>
-
-    <div class="row">
-      <div>
-        <label>Дата</label>
-        <input id="date" type="date" />
-      </div>
-      <div>
-        <label>Тип</label>
-        <select id="type">
-          <option value="trade">Сделка</option>
-          <option value="market">Анализ рынка</option>
-          <option value="review">Разбор дня</option>
-        </select>
-      </div>
-    </div>
-
-    <label>Инструмент (например BTCUSDT / ES / AAPL)</label>
-    <input id="symbol" placeholder="BTCUSDT" />
-
-    <div class="row3">
-      <div>
-        <label>Сетап / стратегия</label>
-        <input id="setup" placeholder="Breakout / Pullback / Range..." />
-      </div>
-      <div>
-        <label>Направление</label>
-        <select id="side">
-          <option value="">—</option>
-          <option value="long">Long</option>
-          <option value="short">Short</option>
-        </select>
-      </div>
-      <div>
-        <label>Риск (R)</label>
-        <input id="risk" type="number" step="0.1" placeholder="1" />
-      </div>
-    </div>
-
-    <div class="row">
-      <div>
-        <label>Результат (R)</label>
-        <input id="resultR" type="number" step="0.1" placeholder="например 1.5 или -1" />
-      </div>
-      <div>
-        <label>Эмоция</label>
-        <select id="emotion">
-          <option value="">—</option>
-          <option>спокойно</option>
-          <option>страх</option>
-          <option>жадность</option>
-          <option>фомо</option>
-          <option>злость</option>
-          <option>уверенность</option>
-        </select>
-      </div>
-    </div>
-
-    <label>План / контекст (что видел на рынке)</label>
-    <textarea id="context" placeholder="Тренд, уровни, ликвидность, новости, что ожидал..."></textarea>
-
-    <label>Итог / ошибки / что улучшить</label>
-    <textarea id="lessons" placeholder="Что сделал правильно, где нарушил правила, план улучшения..."></textarea>
-
-    <div class="btnRow" style="margin-top:10px;">
-      <button id="saveBtn" type="button">Сохранить в БД</button>
-      <button id="resetBtn" type="button">Очистить</button>
-    </div>
-
-    <p class="muted" style="margin-top:10px;">
-      ⚠️ Сначала <b>войти</b> или <b>зарегистрироваться</b>. Иначе запись не сохранится.
-    </p>
-
-    <div class="debugbox" id="debugLog">Debug log: ожидаю запуск app.js…</div>
-  </section>
-
-  <section class="card">
-    <h2>📊 Дашборд</h2>
-    <div class="kpi" id="kpi"></div>
-
-    <div class="row" style="margin-top:12px;">
-      <div>
-        <label>Поиск</label>
-        <input id="q" placeholder="BTC / breakout / ошибки..." />
-      </div>
-      <div>
-        <label>Фильтр типа</label>
-        <select id="filterType">
-          <option value="">Все</option>
-          <option value="trade">Сделка</option>
-          <option value="market">Анализ рынка</option>
-          <option value="review">Разбор дня</option>
-        </select>
-      </div>
-    </div>
-
-    <div class="muted" id="listState" style="margin-top:10px;">—</div>
-
-    <div style="margin-top:12px; overflow:auto;">
-      <table>
-        <thead>
-          <tr>
-            <th style="width:110px;">Дата</th>
-            <th style="width:110px;">Тип</th>
-            <th>Содержание</th>
-            <th style="width:100px;" class="right">R</th>
-            <th style="width:140px;">Действия</th>
-          </tr>
-        </thead>
-        <tbody id="rows"></tbody>
-      </table>
-    </div>
-  </section>
-</main>
-
-<!-- ВИДИМАЯ ВЕРСИЯ (HTML) -->
-<div class="versionbar">Trading Journal · <b>v2025-12-28 00:20 (IL)</b></div>
-
-<div class="toast" id="toast"></div>
-</body>
-</html>
+/* ===== tags*
