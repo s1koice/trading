@@ -224,4 +224,77 @@
     <div class="row">
       <div>
         <label>Результат (R)</label>
-        <input id="resultR" type="number" step="0.1
+        <input id="resultR" type="number" step="0.1" placeholder="например 1.5 или -1" />
+      </div>
+      <div>
+        <label>Эмоция</label>
+        <select id="emotion">
+          <option value="">—</option>
+          <option>спокойно</option>
+          <option>страх</option>
+          <option>жадность</option>
+          <option>фомо</option>
+          <option>злость</option>
+          <option>уверенность</option>
+        </select>
+      </div>
+    </div>
+
+    <label>План / контекст</label>
+    <textarea id="context" placeholder="Уровни, сценарий, новости…"></textarea>
+
+    <label>Итог / ошибки / улучшить</label>
+    <textarea id="lessons" placeholder="Что улучшить…"></textarea>
+
+    <div class="btnRow" style="margin-top:10px;">
+      <button id="saveBtn" type="button">Сохранить в БД</button>
+      <button id="resetBtn" type="button">Очистить</button>
+    </div>
+
+    <div class="debugbox" id="debugLog">Debug log: ожидаю запуск app.js…</div>
+  </section>
+
+  <!-- RIGHT -->
+  <section class="card">
+    <h2>📊 Дашборд</h2>
+
+    <div class="kpi" id="kpi"></div>
+
+    <div class="row" style="margin-top:12px;">
+      <div>
+        <label>Поиск</label>
+        <input id="q" placeholder="BTC / breakout / ошибки..." />
+      </div>
+      <div>
+        <label>Фильтр типа</label>
+        <select id="filterType">
+          <option value="">Все</option>
+          <option value="trade">Сделка</option>
+          <option value="market">Анализ рынка</option>
+          <option value="review">Разбор дня</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="muted" id="listState" style="margin-top:10px;">—</div>
+
+    <div style="margin-top:12px; overflow:auto;">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:110px;">Дата</th>
+            <th style="width:110px;">Тип</th>
+            <th>Содержание</th>
+            <th style="width:100px;" class="right">R</th>
+            <th style="width:140px;">Действия</th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<div class="toast" id="toast"></div>
+</body>
+</html>
