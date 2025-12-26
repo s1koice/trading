@@ -1,10 +1,10 @@
 /* =========================================================
    Trading Journal – app.js (FULL)
    DB + RLS ready
-   Version: v2025-12-28 01:55 (IL)
+   Version: v2025-12-28 02:00 (IL)
    ========================================================= */
 
-const APP_VERSION = "v2025-12-28 01:55 (IL)";
+const APP_VERSION = "v2025-12-28 02:00 (IL)";
 
 // ---------- helpers ----------
 const $ = (id) => document.getElementById(id);
