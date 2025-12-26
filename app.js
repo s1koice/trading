@@ -1,416 +1,258 @@
-/* =========================================================
-   Trading Journal – app.js (FULL)
-   DB + RLS ready
-   Version: v2025-12-28 02:00 (IL)
-   ========================================================= */
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Trading Journal</title>
 
-const APP_VERSION = "v2025-12-28 02:00 (IL)";
+  <style>
+    :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; }
+    body { margin: 0; background:#0b0f19; color:#e7eaf3; }
 
-// ---------- helpers ----------
-const $ = (id) => document.getElementById(id);
-
-function clearLog() {
-  const box = $("debugLog");
-  if (box) box.textContent = "";
-}
-
-function log(msg) {
-  const box = $("debugLog");
-  if (!box) return;
-  const t = new Date().toLocaleTimeString();
-  box.textContent = `[${t}] ${msg}\n` + box.textContent;
-}
-
-function setText(id, text) {
-  const el = $(id);
-  if (el) el.textContent = text;
-}
-
-function escapeHtml(s) {
-  return String(s ?? "").replace(/[&<>"']/g, (m) => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    '"': "&quot;",
-    "'": "&#39;"
-  }[m]));
-}
-
-function toast(msg) {
-  const el = $("toast");
-  if (!el) return;
-  el.style.display = "block";
-  el.textContent = msg;
-  clearTimeout(window.__toastTimer);
-  window.__toastTimer = setTimeout(() => (el.style.display = "none"), 2500);
-}
-
-function todayISO() {
-  const d = new Date();
-  const off = d.getTimezoneOffset();
-  return new Date(d.getTime() - off * 60000).toISOString().slice(0, 10);
-}
-
-function numOrNull(v) {
-  if (v === "" || v == null) return null;
-  const n = Number(v);
-  return Number.isFinite(n) ? n : null;
-}
-
-function formatType(t) {
-  return t === "trade" ? "Сделка" : t === "market" ? "Анализ" : "Разбор";
-}
-
-function setFormEnabled(enabled) {
-  const ids = [
-    "date", "type", "symbol", "setup", "side", "risk", "resultR",
-    "emotion", "context", "lessons", "saveBtn", "resetBtn",
-    "reloadBtn", "q", "filterType"
-  ];
-  ids.forEach((id) => {
-    const el = $(id);
-    if (el) el.disabled = !enabled;
-  });
-}
-
-// ---------- Supabase ----------
-let sb = null;
-let currentUser = null;
-
-const SUPABASE_URL = "https://lchstbkuizgablzdczgf.supabase.co";
-const SUPABASE_ANON_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxjaHN0Ymt1aXpnYWJsemRjemdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY3NzE2MDQsImV4cCI6MjA4MjM0NzYwNH0.0HnmhHZSDNktliI1ieg7F_ehVuvDp3nwh8vhFJM6eRg";
-
-if (window.supabase?.createClient) {
-  sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-}
-
-// ---------- state ----------
-const state = {
-  entries: [],
-  q: "",
-  filterType: ""
-};
-
-// ---------- auth render ----------
-function renderAuth() {
-  if (!sb) {
-    setText("sbBadge", "Supabase: ❌");
-    setText("authState", "Supabase не загрузился");
-    setFormEnabled(false);
-    return;
-  }
-
-  setText("sbBadge", "Supabase: OK");
-
-  if (currentUser) {
-    setText("authState", `Вход: ${currentUser.email}`);
-    setFormEnabled(true);
-  } else {
-    setText("authState", "Не авторизован");
-    setFormEnabled(false);
-  }
-}
-
-// слушаем изменения сессии (самый стабильный способ)
-if (sb) {
-  sb.auth.onAuthStateChange((event, session) => {
-    log(`Auth event: ${event}`);
-    currentUser = session?.user || null;
-    renderAuth();
-    if (currentUser) {
-      loadFromDB();
-    } else {
-      state.entries = [];
-      render();
+    header {
+      padding: 18px 16px;
+      border-bottom: 1px solid #1b2440;
+      background:#0b0f19;
+      position: sticky;
+      top:0;
+      z-index: 10;
     }
-  });
-}
+    h1 { margin: 0 0 6px; font-size: 18px; }
+    .sub { display:flex; gap:10px; flex-wrap: wrap; }
+    .badge {
+      display:inline-block;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border:1px solid #223057;
+      background:#0b1020;
+      font-size: 12px;
+      color:#cfd6f5;
+    }
 
-// ---------- DB ----------
-function mapFromDB(x) {
-  return {
-    id: x.id,
-    user_id: x.user_id,
-    date: x.date,
-    type: x.type,
-    symbol: x.symbol || "",
-    setup: x.setup || "",
-    side: x.side || "",
-    risk: x.risk,
-    resultR: x.result_r,
-    emotion: x.emotion || "",
-    context: x.context || "",
-    lessons: x.lessons || "",
-    createdAt: x.created_at
-  };
-}
+    /* ВАЖНО: main ВСЕГДА видим */
+    main {
+      display: grid !important;
+      grid-template-columns: 380px 1fr;
+      gap: 16px;
+      max-width: 1150px;
+      margin: 0 auto;
+      padding: 16px;
+      min-height: 60vh;
+    }
+    @media (max-width: 980px){
+      main { grid-template-columns: 1fr; }
+    }
 
-async function loadFromDB() {
-  if (!currentUser) {
-    setText("listState", "Нужно войти.");
-    state.entries = [];
-    render();
-    return;
-  }
+    .card {
+      background:#0f1629;
+      border:1px solid #1b2440;
+      border-radius: 16px;
+      padding: 14px;
+      overflow: visible;
+    }
+    .card h2 { margin: 0 0 10px; font-size: 14px; color:#cfd6f5; }
+    .muted { color:#aab3d3; font-size: 12px; }
 
-  setText("listState", "Загрузка…");
-  log("loadFromDB: start");
+    label { display:block; font-size: 12px; color:#aab3d3; margin: 10px 0 6px; }
+    input, select, textarea, button {
+      width: 100%;
+      box-sizing: border-box;
+      border-radius: 12px;
+      border: 1px solid #223057;
+      background:#0b1020;
+      color:#e7eaf3;
+      padding: 10px 12px;
+      font-size: 14px;
+    }
+    textarea { min-height: 88px; resize: vertical; }
+    button { cursor:pointer; background:#111a33; border:1px solid #2d3d6f; }
+    button:disabled { opacity: .6; cursor: not-allowed; }
 
-  const { data, error } = await sb
-    .from("entries")
-    .select("*")
-    .order("date", { ascending: false })
-    .order("created_at", { ascending: false });
+    .row { display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+    .row3 { display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px; }
+    .btnRow { display:flex; gap:10px; }
+    .btnRow button { flex:1; }
 
-  if (error) {
-    setText("listState", "Ошибка загрузки: " + error.message);
-    log("loadFromDB error: " + error.message);
-    state.entries = [];
-    render();
-    return;
-  }
+    .kpi { display:grid; grid-template-columns: repeat(4, 1fr); gap:10px; }
+    .kpi .box { background:#0b1020; border:1px solid #223057; border-radius: 14px; padding: 10px; }
+    .kpi .v { font-size: 18px; margin-top:4px; }
 
-  state.entries = (data || []).map(mapFromDB);
-  setText("listState", `Загружено: ${state.entries.length}`);
-  log("loadFromDB OK: " + state.entries.length);
-  render();
-}
+    /* TABLE FIX */
+    table {
+      width:100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      overflow:hidden;
+      border-radius: 14px;
+      border:1px solid #1b2440;
+    }
+    thead th{
+      background:#0b1020;
+      color:#cfd6f5;
+      font-size: 13px;
+      padding: 12px;
+      border-bottom:1px solid #1b2440;
+      text-align:left;
+      white-space: nowrap;
+    }
+    td{
+      padding: 14px 12px;
+      vertical-align: top;
+      font-size: 13px;
+      line-height: 1.45; /* ключ */
+      border-bottom:1px solid #1b2440;
+    }
+    tr:hover td { background:#0b1020; }
+    .right { text-align:right; }
 
-async function insertToDB(entry) {
-  if (!currentUser) {
-    toast("Сначала войди");
-    return false;
-  }
+    .tag {
+      display:inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      border:1px solid #223057;
+      font-size: 12px;
+      color:#cfd6f5;
+      white-space: nowrap;
+    }
+    .pill { display:inline-flex; gap:8px; align-items:center; flex-wrap: wrap; }
 
-  const payload = {
-    user_id: currentUser.id,
-    date: entry.date,
-    type: entry.type,
-    symbol: entry.symbol || null,
-    setup: entry.setup || null,
-    side: entry.side || null,
-    risk: entry.risk,
-    result_r: entry.resultR,
-    emotion: entry.emotion || null,
-    context: entry.context || null,
-    lessons: entry.lessons || null
-  };
+    .debugbox {
+      margin-top: 10px;
+      padding: 10px 12px;
+      border-radius: 14px;
+      background:#0b1020;
+      border:1px solid #223057;
+      max-height: 220px;
+      overflow:auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 12px;
+    }
 
-  const { error } = await sb.from("entries").insert(payload);
-  if (error) {
-    toast("Ошибка сохранения: " + error.message);
-    log("insert error: " + error.message);
-    return false;
-  }
-  return true;
-}
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: 62px;
+      transform: translateX(-50%);
+      background: #0b1020;
+      border:1px solid #223057;
+      border-radius: 14px;
+      padding: 10px 12px;
+      min-width: 260px;
+      max-width: 92vw;
+      display:none;
+      z-index: 9999;
+    }
 
-async function deleteFromDB(id) {
-  const { error } = await sb.from("entries").delete().eq("id", id);
-  if (error) {
-    toast("Ошибка удаления: " + error.message);
-    log("delete error: " + error.message);
-    return false;
-  }
-  return true;
-}
+    /* Аварийное сообщение если JS не стартанул */
+    #jsFail {
+      margin-top: 10px;
+      padding: 10px 12px;
+      border-radius: 14px;
+      border:1px solid #5a2a2a;
+      background:#1a0f12;
+      color:#ffb6b6;
+      font-size: 12px;
+    }
+  </style>
 
-// ---------- UI ----------
-function resetForm() {
-  $("date").value = todayISO();
-  $("type").value = "trade";
-  $("symbol").value = "";
-  $("setup").value = "";
-  $("side").value = "";
-  $("risk").value = "";
-  $("resultR").value = "";
-  $("emotion").value = "";
-  $("context").value = "";
-  $("lessons").value = "";
-}
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js" defer></script>
+  <script src="./app.js" defer></script>
+</head>
 
-function filteredEntries() {
-  const q = (state.q || "").trim().toLowerCase();
-  return state.entries.filter((e) => {
-    const okType = !state.filterType || e.type === state.filterType;
-    const hay = [
-      e.date, e.type, e.symbol, e.setup, e.side, e.emotion, e.context, e.lessons
-    ].join(" ").toLowerCase();
-    const okQ = !q || hay.includes(q);
-    return okType && okQ;
-  });
-}
+<body>
+<header>
+  <h1>Trading Journal</h1>
+  <div class="sub">
+    <span class="badge" id="versionBadge">Версия: …</span>
+    <span class="badge" id="sbBadge">Supabase: …</span>
+    <span class="badge" id="jsBadge">JS: …</span>
+  </div>
+</header>
 
-function render() {
-  // KPI
-  const trades = state.entries.filter((e) => e.type === "trade");
-  const totalR = trades.reduce((s, e) => s + (Number(e.resultR) || 0), 0);
-  const wins = trades.filter((e) => (Number(e.resultR) || 0) > 0).length;
-  const winrate = trades.length ? Math.round((wins / trades.length) * 100) : 0;
+<main id="main">
+  <section class="card">
+    <h2>🔐 Аккаунт</h2>
 
-  const kpi = [
-    { k: "Всего записей", v: state.entries.length },
-    { k: "Сделок", v: trades.length },
-    { k: "Winrate", v: winrate + "%" },
-    { k: "Суммарно R", v: (Math.round(totalR * 10) / 10).toString() }
-  ];
+    <label>Email</label>
+    <input id="email" autocomplete="email" />
 
-  $("kpi").innerHTML = kpi.map((x) => `
-    <div class="box">
-      <div class="muted">${escapeHtml(x.k)}</div>
-      <div class="v">${escapeHtml(x.v)}</div>
+    <label>Пароль</label>
+    <input id="password" type="password" autocomplete="current-password" />
+
+    <div class="btnRow" style="margin-top:10px;">
+      <button id="loginBtn" type="button">Войти</button>
+      <button id="signupBtn" type="button">Регистрация</button>
     </div>
-  `).join("");
 
-  // Table rows
-  const rows = filteredEntries();
-  $("rows").innerHTML = rows.map((e) => `
-    <tr>
-      <td>${escapeHtml(e.date || "")}</td>
-      <td><span class="tag">${escapeHtml(formatType(e.type))}</span></td>
-      <td>
-        <div class="pill">
-          <strong>${escapeHtml(e.symbol || "—")}</strong>
-          ${e.side ? `<span class="tag">${escapeHtml(e.side.toUpperCase())}</span>` : ""}
-          ${e.setup ? `<span class="tag">${escapeHtml(e.setup)}</span>` : ""}
-          ${e.emotion ? `<span class="tag">${escapeHtml(e.emotion)}</span>` : ""}
-        </div>
-        <div class="muted" style="margin-top:6px;">
-          ${escapeHtml((e.context || e.lessons || "").slice(0, 220))}${(e.context||e.lessons||"").length>220?"…":""}
-        </div>
-      </td>
-      <td class="right">${e.type === "trade" ? escapeHtml(e.resultR ?? "—") : "—"}</td>
-      <td><button type="button" data-del="${escapeHtml(e.id)}">Удалить</button></td>
-    </tr>
-  `).join("");
+    <div class="btnRow" style="margin-top:10px;">
+      <button id="logoutBtn" type="button">Выйти</button>
+      <button id="reloadBtn" type="button">Обновить записи</button>
+    </div>
 
-  // bind delete
-  document.querySelectorAll("button[data-del]").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      const id = btn.getAttribute("data-del");
-      if (!confirm("Удалить запись?")) return;
-      await deleteFromDB(id);
-      await loadFromDB();
-    });
-  });
+    <div class="muted" id="authState" style="margin-top:10px;">—</div>
 
-  if (currentUser) {
-    setText("listState", `Показано: ${rows.length} (всего: ${state.entries.length})`);
-  }
-}
+    <div id="jsFail">
+      Если ты видишь это сообщение и кнопки не работают — значит JS не запустился.
+      Проверь Console (F12) на ошибки.
+    </div>
 
-// ---------- actions ----------
-async function login() {
-  toast("Нажал: Войти");
-  log("Click login");
+    <div class="debugbox" id="debugLog">Debug log: ожидаю запуск app.js…</div>
+  </section>
 
-  const email = $("email").value.trim();
-  const password = $("password").value;
+  <section class="card">
+    <h2>📊 Дашборд</h2>
+    <div class="kpi" id="kpi"></div>
 
-  if (!email || !password) return alert("Email и пароль обязательны");
+    <div class="row" style="margin-top:12px;">
+      <div>
+        <label>Поиск</label>
+        <input id="q" placeholder="BTC / breakout / ошибки..." />
+      </div>
+      <div>
+        <label>Фильтр типа</label>
+        <select id="filterType">
+          <option value="">Все</option>
+          <option value="trade">Сделка</option>
+          <option value="market">Анализ рынка</option>
+          <option value="review">Разбор дня</option>
+        </select>
+      </div>
+    </div>
 
-  const { error } = await sb.auth.signInWithPassword({ email, password });
-  if (error) {
-    alert(error.message);
-    log("Login error: " + error.message);
-  }
-}
+    <div class="muted" id="listState" style="margin-top:10px;">—</div>
 
-async function signup() {
-  toast("Нажал: Регистрация");
-  log("Click signup");
+    <div style="margin-top:12px; overflow:auto;">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:110px;">Дата</th>
+            <th style="width:110px;">Тип</th>
+            <th>Содержание</th>
+            <th style="width:100px;" class="right">R</th>
+            <th style="width:140px;">Действия</th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
 
-  const email = $("email").value.trim();
-  const password = $("password").value;
+<div class="toast" id="toast"></div>
 
-  if (!email || !password) return alert("Email и пароль обязательны");
-
-  const { error } = await sb.auth.signUp({ email, password });
-  if (error) {
-    alert(error.message);
-    log("Signup error: " + error.message);
-  } else {
-    alert("Пользователь создан. Если включено подтверждение — проверь почту.");
-  }
-}
-
-async function logout() {
-  toast("Нажал: Выйти");
-  log("Click logout");
-  await sb.auth.signOut();
-}
-
-async function saveEntry() {
-  toast("Сохраняю…");
-  log("Click save");
-
-  const entry = {
-    date: $("date").value || todayISO(),
-    type: $("type").value,
-    symbol: $("symbol").value.trim(),
-    setup: $("setup").value.trim(),
-    side: $("side").value || null,
-    risk: numOrNull($("risk").value),
-    resultR: numOrNull($("resultR").value),
-    emotion: $("emotion").value || null,
-    context: $("context").value.trim(),
-    lessons: $("lessons").value.trim()
-  };
-
-  if (entry.type === "trade" && !entry.symbol) {
-    toast("Для сделки укажи инструмент");
-    return;
-  }
-
-  $("saveBtn").disabled = true;
-  const ok = await insertToDB(entry);
-  $("saveBtn").disabled = false;
-
-  if (ok) {
-    toast("Сохранено ✅");
-    resetForm();
-    await loadFromDB();
-  }
-}
-
-// ---------- init ----------
-document.addEventListener("DOMContentLoaded", async () => {
-  clearLog();
-
-  setText("versionBadge", "Версия: " + APP_VERSION);
-  setText("jsBadge", "JS: OK");
-  setText("sbBadge", sb ? "Supabase: OK" : "Supabase: ❌");
-
-  $("date").value = todayISO();
-
-  $("loginBtn").onclick = login;
-  $("signupBtn").onclick = signup;
-  $("logoutBtn").onclick = logout;
-
-  $("saveBtn").onclick = saveEntry;
-  $("resetBtn").onclick = () => { resetForm(); toast("Очищено"); };
-
-  $("reloadBtn").onclick = () => loadFromDB();
-
-  $("q").addEventListener("input", (e) => { state.q = e.target.value; render(); });
-  $("filterType").addEventListener("change", (e) => { state.filterType = e.target.value; render(); });
-
-  log("app.js запущен: " + APP_VERSION);
-
-  // старт: проверяем текущую сессию
-  if (!sb) {
-    renderAuth();
-    return;
-  }
-
-  const { data } = await sb.auth.getSession();
-  currentUser = data.session?.user || null;
-  renderAuth();
-
-  if (currentUser) {
-    await loadFromDB();
-  } else {
-    render();
-  }
-});
+<script>
+  // Если app.js стартанёт — он поставит "JS: OK".
+  // Если через 1.5s не поменялось — покажем подсказку.
+  setTimeout(() => {
+    const js = document.getElementById("jsBadge");
+    if (js && !js.textContent.includes("OK")) {
+      // оставляем аварийное сообщение видимым
+    } else {
+      const fail = document.getElementById("jsFail");
+      if (fail) fail.style.display = "none";
+    }
+  }, 1500);
+</script>
+</body>
+</html>
