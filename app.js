@@ -1,152 +1,182 @@
 /* =========================================================
-   Trading Journal – app.js (FULL, SAFE BINDINGS)
-   Version: v2025-12-28 02:10 (IL)
+   Trading Journal – app.js (FULL)
+   Version: v2025-12-28 02:25 (IL)
    ========================================================= */
 
-const APP_VERSION = "v2025-12-28 02:10 (IL)";
+const APP_VERSION = "v2025-12-28 02:25 (IL)";
 
-// ---------- helpers ----------
 const $ = (id) => document.getElementById(id);
 
-function setText(id, text) {
-  const el = $(id);
-  if (el) el.textContent = text;
-}
-
-function clearLog() {
-  const box = $("debugLog");
-  if (box) box.textContent = "";
-}
-
-function log(msg) {
-  const box = $("debugLog");
-  if (!box) return;
-  const t = new Date().toLocaleTimeString();
-  box.textContent = `[${t}] ${msg}\n` + box.textContent;
-}
-
+function setText(id, text) { const el = $(id); if (el) el.textContent = text; }
 function toast(msg) {
-  const el = $("toast");
-  if (!el) return;
+  const el = $("toast"); if (!el) return;
   el.style.display = "block";
   el.textContent = msg;
   clearTimeout(window.__toastTimer);
-  window.__toastTimer = setTimeout(() => (el.style.display = "none"), 2000);
+  window.__toastTimer = setTimeout(() => (el.style.display = "none"), 2200);
 }
-
+function log(msg) {
+  const box = $("debugLog"); if (!box) return;
+  const t = new Date().toLocaleTimeString();
+  box.textContent = `[${t}] ${msg}\n` + box.textContent;
+}
 function todayISO() {
   const d = new Date();
   const off = d.getTimezoneOffset();
   return new Date(d.getTime() - off * 60000).toISOString().slice(0, 10);
 }
-
 function numOrNull(v) {
   if (v === "" || v == null) return null;
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
 }
-
 function escapeHtml(s) {
   return String(s ?? "").replace(/[&<>"']/g, (m) => ({
     "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
   }[m]));
 }
-
 function formatType(t) {
   return t === "trade" ? "Сделка" : t === "market" ? "Анализ" : "Разбор";
 }
 
-// ---------- global error capture (чтобы видеть в debug) ----------
-window.addEventListener("error", (e) => {
-  log("❌ JS error: " + (e.message || e));
-});
-window.addEventListener("unhandledrejection", (e) => {
-  log("❌ Promise error: " + (e.reason?.message || e.reason || e));
-});
+// ===== error capture =====
+window.addEventListener("error", (e) => log("❌ JS error: " + (e.message || e)));
+window.addEventListener("unhandledrejection", (e) => log("❌ Promise error: " + (e.reason?.message || e.reason || e)));
 
-// ---------- Supabase ----------
-let sb = null;
-let currentUser = null;
-
+// ===== Supabase =====
 const SUPABASE_URL = "https://lchstbkuizgablzdczgf.supabase.co";
 const SUPABASE_ANON_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxjaHN0Ymt1aXpnYWJsemRjemdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY3NzE2MDQsImV4cCI6MjA4MjM0NzYwNH0.0HnmhHZSDNktliI1ieg7F_ehVuvDp3nwh8vhFJM6eRg";
 
+let sb = null;
 try {
-  if (window.supabase?.createClient) {
-    sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-  }
-} catch (e) {
-  sb = null;
-}
+  if (window.supabase?.createClient) sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+} catch { sb = null; }
 
-// ---------- state ----------
+let currentUser = null;
+
 const state = {
   entries: [],
   q: "",
   filterType: ""
 };
 
-// ---------- auth render ----------
+// ===== "кабинет" UI переключение =====
+function ensureCabinetUI() {
+  // добавим контейнер кабинета прямо в карточку аккаунта (если его ещё нет)
+  const authState = $("authState");
+  if (!authState) return;
+
+  let cab = $("cabinetPanel");
+  if (!cab) {
+    cab = document.createElement("div");
+    cab.id = "cabinetPanel";
+    cab.style.marginTop = "10px";
+    cab.style.padding = "10px 12px";
+    cab.style.borderRadius = "14px";
+    cab.style.border = "1px solid #223057";
+    cab.style.background = "#0b1020";
+    cab.innerHTML = `
+      <div class="muted" style="margin-bottom:8px;">Кабинет</div>
+      <div id="cabinetUser" style="font-size:13px;margin-bottom:10px;"></div>
+      <div style="display:flex;gap:10px;">
+        <button id="cabinetLogout" type="button" style="flex:1;">Выйти</button>
+        <button id="cabinetScroll" type="button" style="flex:1;">К дашборду</button>
+      </div>
+    `;
+    authState.parentElement.insertBefore(cab, authState.nextSibling);
+  }
+}
+
+function setCabinetMode(isIn) {
+  ensureCabinetUI();
+
+  const email = $("email");
+  const pass = $("password");
+  const loginBtn = $("loginBtn");
+  const signupBtn = $("signupBtn");
+
+  const cab = $("cabinetPanel");
+  const cabUser = $("cabinetUser");
+  const cabLogout = $("cabinetLogout");
+  const cabScroll = $("cabinetScroll");
+
+  if (isIn) {
+    if (email) email.disabled = true;
+    if (pass) pass.disabled = true;
+    if (loginBtn) loginBtn.disabled = true;
+    if (signupBtn) signupBtn.disabled = true;
+
+    if (cab) cab.style.display = "block";
+    if (cabUser) cabUser.textContent = `Вы вошли как: ${currentUser?.email || "—"}`;
+
+    if (cabLogout) cabLogout.onclick = () => logout();
+    if (cabScroll) cabScroll.onclick = () => {
+      const dash = document.querySelector("section.card:nth-child(2)");
+      if (dash) dash.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
+  } else {
+    if (email) email.disabled = false;
+    if (pass) pass.disabled = false;
+    if (loginBtn) loginBtn.disabled = false;
+    if (signupBtn) signupBtn.disabled = false;
+
+    if (cab) cab.style.display = "none";
+  }
+}
+
+// ===== auth render =====
 function renderAuth() {
+  setText("versionBadge", "Версия: " + APP_VERSION);
+  setText("jsBadge", "JS: OK");
+  setText("sbBadge", sb ? "Supabase: OK" : "Supabase: ❌");
+
   if (!sb) {
-    setText("sbBadge", "Supabase: ❌");
     setText("authState", "Supabase не загрузился");
+    setCabinetMode(false);
     return;
   }
-
-  setText("sbBadge", "Supabase: OK");
 
   if (currentUser) {
     setText("authState", `Вход: ${currentUser.email}`);
+    setCabinetMode(true);
   } else {
     setText("authState", "Не авторизован");
+    setCabinetMode(false);
   }
 }
 
-// ---------- UI bind (самое важное) ----------
-function bindButton(id, handlerName, handlerFn) {
+// ===== UI bind =====
+function bindButton(id, name, fn) {
   const el = $(id);
-  if (!el) {
-    log(`⚠️ Не найден элемент #${id} (не могу повесить ${handlerName})`);
-    return;
-  }
-
-  // снимаем прошлые (если были)
+  if (!el) { log(`⚠️ Не найден #${id} (для ${name})`); return; }
   el.onclick = null;
-
   el.addEventListener("click", (ev) => {
     ev.preventDefault();
     ev.stopPropagation();
-    handlerFn();
-  }, { once: false });
-
-  log(`✅ Привязал ${handlerName} → #${id}`);
+    fn();
+  });
 }
 
 function bindUI() {
-  // Биндим кнопки железно
   bindButton("loginBtn", "login()", login);
   bindButton("signupBtn", "signup()", signup);
   bindButton("logoutBtn", "logout()", logout);
-  bindButton("saveBtn", "saveEntry()", saveEntry);
-  bindButton("resetBtn", "resetForm()", () => { resetForm(); toast("Очищено"); });
   bindButton("reloadBtn", "loadFromDB()", loadFromDB);
 
+  bindButton("saveBtn", "saveEntry()", saveEntry);
+  bindButton("resetBtn", "resetForm()", () => { resetForm(); toast("Очищено"); });
+
   const q = $("q");
-  if (q) {
-    q.oninput = (e) => { state.q = e.target.value; render(); };
-    log("✅ Привязал input → #q");
-  }
+  if (q) q.oninput = (e) => { state.q = e.target.value; render(); };
 
   const ft = $("filterType");
-  if (ft) {
-    ft.onchange = (e) => { state.filterType = e.target.value; render(); };
-    log("✅ Привязал change → #filterType");
-  }
+  if (ft) ft.onchange = (e) => { state.filterType = e.target.value; render(); };
+
+  log("✅ UI bind OK");
 }
 
-// ---------- DB ----------
+// ===== DB =====
 function mapFromDB(x) {
   return {
     id: x.id,
@@ -162,6 +192,16 @@ function mapFromDB(x) {
     lessons: x.lessons || "",
     createdAt: x.created_at
   };
+}
+
+function filteredEntries() {
+  const q = (state.q || "").trim().toLowerCase();
+  return state.entries.filter((e) => {
+    const okType = !state.filterType || e.type === state.filterType;
+    const hay = [e.date, e.type, e.symbol, e.setup, e.side, e.emotion, e.context, e.lessons].join(" ").toLowerCase();
+    const okQ = !q || hay.includes(q);
+    return okType && okQ;
+  });
 }
 
 async function loadFromDB() {
@@ -188,7 +228,6 @@ async function loadFromDB() {
   }
 
   state.entries = (data || []).map(mapFromDB);
-  setText("listState", `Показано: ${filteredEntries().length} (всего: ${state.entries.length})`);
   log("loadFromDB OK: " + state.entries.length);
   render();
 }
@@ -227,36 +266,23 @@ async function deleteFromDB(id) {
   return true;
 }
 
-// ---------- render ----------
-function filteredEntries() {
-  const q = (state.q || "").trim().toLowerCase();
-  return state.entries.filter((e) => {
-    const okType = !state.filterType || e.type === state.filterType;
-    const hay = [
-      e.date, e.type, e.symbol, e.setup, e.side, e.emotion, e.context, e.lessons
-    ].join(" ").toLowerCase();
-    const okQ = !q || hay.includes(q);
-    return okType && okQ;
-  });
-}
-
+// ===== render =====
 function render() {
-  // KPI
   const trades = state.entries.filter((e) => e.type === "trade");
   const totalR = trades.reduce((s, e) => s + (Number(e.resultR) || 0), 0);
   const wins = trades.filter((e) => (Number(e.resultR) || 0) > 0).length;
   const winrate = trades.length ? Math.round((wins / trades.length) * 100) : 0;
 
-  const kpi = [
+  const kpiData = [
     { k: "Всего записей", v: state.entries.length },
     { k: "Сделок", v: trades.length },
     { k: "Winrate", v: winrate + "%" },
     { k: "Суммарно R", v: (Math.round(totalR * 10) / 10).toString() }
   ];
 
-  const kpiEl = $("kpi");
-  if (kpiEl) {
-    kpiEl.innerHTML = kpi.map((x) => `
+  const kpi = $("kpi");
+  if (kpi) {
+    kpi.innerHTML = kpiData.map((x) => `
       <div class="box">
         <div class="muted">${escapeHtml(x.k)}</div>
         <div class="v">${escapeHtml(x.v)}</div>
@@ -264,7 +290,6 @@ function render() {
     `).join("");
   }
 
-  // rows
   const rows = filteredEntries();
   const rowsEl = $("rows");
   if (rowsEl) {
@@ -289,7 +314,6 @@ function render() {
     `).join("");
   }
 
-  // bind delete
   document.querySelectorAll("button[data-del]").forEach((btn) => {
     btn.onclick = async () => {
       const id = btn.getAttribute("data-del");
@@ -301,12 +325,10 @@ function render() {
   });
 
   const ls = $("listState");
-  if (ls && currentUser) {
-    ls.textContent = `Показано: ${rows.length} (всего: ${state.entries.length})`;
-  }
+  if (ls && currentUser) ls.textContent = `Показано: ${rows.length} (всего: ${state.entries.length})`;
 }
 
-// ---------- form ----------
+// ===== form =====
 function resetForm() {
   const d = $("date"); if (d) d.value = todayISO();
   const t = $("type"); if (t) t.value = "trade";
@@ -320,9 +342,9 @@ function resetForm() {
   const l = $("lessons"); if (l) l.value = "";
 }
 
-// ---------- actions ----------
+// ===== actions =====
 async function login() {
-  toast("Нажал: Войти");
+  toast("Вхожу…");
   log("Click login");
 
   const email = $("email")?.value?.trim() || "";
@@ -339,7 +361,7 @@ async function login() {
 }
 
 async function signup() {
-  toast("Нажал: Регистрация");
+  toast("Создаю аккаунт…");
   log("Click signup");
 
   const email = $("email")?.value?.trim() || "";
@@ -351,13 +373,13 @@ async function signup() {
     alert(error.message);
     log("Signup error: " + error.message);
   } else {
-    alert("Пользователь создан. Если включено подтверждение — проверь почту.");
+    alert("Аккаунт создан. Если включено подтверждение — проверь почту.");
     log("Signup request OK");
   }
 }
 
 async function logout() {
-  toast("Нажал: Выйти");
+  toast("Выход…");
   log("Click logout");
   await sb.auth.signOut();
 }
@@ -366,10 +388,7 @@ async function saveEntry() {
   toast("Сохраняю…");
   log("Click save");
 
-  if (!currentUser) {
-    toast("Сначала войди");
-    return;
-  }
+  if (!currentUser) return toast("Сначала войди");
 
   const entry = {
     date: $("date")?.value || todayISO(),
@@ -384,10 +403,7 @@ async function saveEntry() {
     lessons: ($("lessons")?.value || "").trim()
   };
 
-  if (entry.type === "trade" && !entry.symbol) {
-    toast("Для сделки укажи инструмент");
-    return;
-  }
+  if (entry.type === "trade" && !entry.symbol) return toast("Для сделки укажи инструмент");
 
   const ok = await insertToDB(entry);
   if (ok) {
@@ -397,39 +413,36 @@ async function saveEntry() {
   }
 }
 
-// ---------- init ----------
+// ===== init =====
 document.addEventListener("DOMContentLoaded", async () => {
-  // шапка
   setText("versionBadge", "Версия: " + APP_VERSION);
   setText("jsBadge", "JS: OK");
   setText("sbBadge", sb ? "Supabase: OK" : "Supabase: ❌");
 
-  clearLog();
   log("app.js запущен: " + APP_VERSION);
 
-  // дата по умолчанию
   if ($("date")) $("date").value = todayISO();
 
-  // биндим UI сразу и ещё раз через секунду (на случай кеша/дергания DOM)
   bindUI();
   setTimeout(bindUI, 800);
 
-  if (!sb) {
-    renderAuth();
-    return;
-  }
+  if (!sb) { renderAuth(); return; }
 
-  // auth events
   sb.auth.onAuthStateChange((event, session) => {
     log(`Auth event: ${event}`);
     currentUser = session?.user || null;
     renderAuth();
-    bindUI(); // ещё раз на всякий
+
+    if (event === "SIGNED_IN") {
+      toast("Вход выполнен ✅");
+      const dash = document.querySelector("section.card:nth-child(2)");
+      if (dash) dash.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
     if (currentUser) loadFromDB();
     else { state.entries = []; render(); }
   });
 
-  // стартовая сессия
   const { data } = await sb.auth.getSession();
   currentUser = data.session?.user || null;
   renderAuth();
