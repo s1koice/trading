@@ -4,52 +4,100 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Trading Journal</title>
+
   <style>
     :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; }
     body { margin: 0; background:#0b0f19; color:#e7eaf3; }
-    header { padding: 20px 16px; border-bottom: 1px solid #1b2440; position: sticky; top:0; background:#0b0f19; }
+    header { padding: 20px 16px; border-bottom: 1px solid #1b2440; position: sticky; top:0; background:#0b0f19; z-index: 5; }
     h1 { margin: 0 0 6px; font-size: 18px; }
     .sub { color:#aab3d3; font-size: 13px; }
-    main { max-width: 1100px; margin: 0 auto; padding: 16px; display: grid; gap: 16px; grid-template-columns: 360px 1fr; }
+
+    main { max-width: 1150px; margin: 0 auto; padding: 16px; display: grid; gap: 16px; grid-template-columns: 380px 1fr; }
     .card { background:#0f1629; border:1px solid #1b2440; border-radius: 16px; padding: 14px; }
     .card h2 { margin: 0 0 10px; font-size: 14px; color:#cfd6f5; }
+    .muted { color:#aab3d3; font-size: 12px; }
+    .ok { color:#6ee7b7; }
+    .warn { color:#fbbf24; }
+    .bad { color:#fb7185; }
+
     label { display:block; font-size: 12px; color:#aab3d3; margin: 10px 0 6px; }
     input, select, textarea, button {
       width: 100%; box-sizing: border-box; border-radius: 12px; border: 1px solid #223057;
       background:#0b1020; color:#e7eaf3; padding: 10px 12px; font-size: 14px;
     }
+    input:disabled, select:disabled, textarea:disabled { opacity: 0.6; cursor: not-allowed; }
     textarea { min-height: 88px; resize: vertical; }
-    .row { display:grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    .row3 { display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
     button { cursor:pointer; border: 1px solid #2d3d6f; background:#111a33; }
     button:hover { filter: brightness(1.05); }
+    button:disabled { opacity: 0.55; cursor: not-allowed; }
+
+    .row { display:grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .row3 { display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
     .btnRow { display:flex; gap: 10px; }
     .btnRow button { width: auto; flex: 1; }
+
     .kpi { display:grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
     .kpi .box { background:#0b1020; border:1px solid #223057; border-radius: 14px; padding: 10px; }
     .kpi .v { font-size: 18px; margin-top: 4px; }
-    .muted { color:#aab3d3; font-size: 12px; }
+
+    .divider { border:none; border-top:1px solid #1b2440; margin:14px 0; }
+
     table { width: 100%; border-collapse: collapse; overflow: hidden; border-radius: 14px; border:1px solid #1b2440; }
     th, td { padding: 10px; border-bottom:1px solid #1b2440; vertical-align: top; font-size: 13px; }
-    th { text-align:left; color:#cfd6f5; background:#0b1020; position: sticky; top: 74px; }
+    th { text-align:left; color:#cfd6f5; background:#0b1020; position: sticky; top: 74px; z-index: 3; }
     tr:hover td { background:#0b1020; }
-    .tag { display:inline-block; padding: 2px 8px; border-radius: 999px; border:1px solid #223057; font-size: 12px; color:#cfd6f5; }
-    .pill { display:inline-flex; gap:8px; align-items:center; }
     .right { text-align:right; }
+    .tag { display:inline-block; padding: 2px 8px; border-radius: 999px; border:1px solid #223057; font-size: 12px; color:#cfd6f5; }
+    .pill { display:inline-flex; gap:8px; align-items:center; flex-wrap: wrap; }
+    .actions { display:flex; gap:8px; }
+    .actions button { padding: 8px 10px; }
+
+    .toast {
+      position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%);
+      background: #0b1020; border:1px solid #223057; border-radius: 14px; padding: 10px 12px;
+      min-width: 260px; max-width: 92vw; display:none; z-index: 10;
+    }
+
     @media (max-width: 980px){
       main { grid-template-columns: 1fr; }
       th { top: 0; position: static; }
     }
   </style>
+
+  <!-- Supabase JS -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
+
 <body>
 <header>
   <h1>Trading Journal</h1>
-  <div class="sub">Журнал сделок + анализ рынка (локальное хранение, экспорт/импорт)</div>
+  <div class="sub">Журнал сделок + анализ рынка — хранение в базе данных (Supabase Postgres)</div>
 </header>
 
 <main>
   <section class="card">
+    <h2>🔐 Аккаунт</h2>
+
+    <label>Email</label>
+    <input id="email" placeholder="you@email.com" autocomplete="email" />
+
+    <label>Пароль</label>
+    <input id="password" type="password" placeholder="••••••••" autocomplete="current-password" />
+
+    <div class="btnRow" style="margin-top:10px;">
+      <button id="loginBtn" type="button">Войти</button>
+      <button id="signupBtn" type="button">Регистрация</button>
+    </div>
+
+    <div class="btnRow" style="margin-top:10px;">
+      <button id="logoutBtn" type="button">Выйти</button>
+      <button id="reloadBtn" type="button">Обновить записи</button>
+    </div>
+
+    <div class="muted" id="authState" style="margin-top:10px;">Проверяю авторизацию…</div>
+
+    <hr class="divider">
+
     <h2>➕ Новая запись</h2>
 
     <div class="row">
@@ -115,21 +163,12 @@
     <textarea id="lessons" placeholder="Что сделал правильно, где нарушил правила, план улучшения..."></textarea>
 
     <div class="btnRow" style="margin-top:10px;">
-      <button id="save">Сохранить</button>
-      <button id="reset" type="button">Очистить</button>
+      <button id="saveBtn" type="button">Сохранить в БД</button>
+      <button id="resetBtn" type="button">Очистить</button>
     </div>
-
-    <hr style="border:none;border-top:1px solid #1b2440;margin:14px 0;">
-
-    <h2>📦 Экспорт / импорт</h2>
-    <div class="btnRow">
-      <button id="export">Экспорт JSON</button>
-      <button id="importBtn" type="button">Импорт JSON</button>
-    </div>
-    <input id="importFile" type="file" accept="application/json" style="display:none;" />
 
     <p class="muted" style="margin-top:10px;">
-      ⚠️ Данные сохраняются в браузере (LocalStorage). Экспортируй JSON раз в неделю — и ты не потеряешь журнал.
+      ⚠️ Если ты не вошёл — запись не сохранится. Сначала <b>Войти</b> / <b>Регистрация</b>.
     </p>
   </section>
 
@@ -153,6 +192,8 @@
       </div>
     </div>
 
+    <div class="muted" id="listState" style="margin-top:10px;">—</div>
+
     <div style="margin-top:12px; overflow:auto;">
       <table>
         <thead>
@@ -170,16 +211,34 @@
   </section>
 </main>
 
-<script>
-  const LS_KEY = "trading_journal_v1";
+<div class="toast" id="toast"></div>
 
+<script>
+  // =========================
+  // 1) SUPABASE CONFIG
+  // =========================
+  const SUPABASE_URL = "https://lchstbkuizgablzdczgf.supabase.co";
+  const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxjaHN0Ymt1aXpnYWJsemRjemdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY3NzE2MDQsImV4cCI6MjA4MjM0NzYwNH0.0HnmhHZSDNktliI1ieg7F_ehVuvDp3nwh8vhFJM6eRg";
+  const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  // =========================
+  // 2) HELPERS
+  // =========================
   const $ = (id) => document.getElementById(id);
 
-  const state = {
-    entries: load(),
-    filterType: "",
-    q: ""
-  };
+  function toast(msg, kind = "ok") {
+    const t = $("toast");
+    t.style.display = "block";
+    t.innerHTML = `<span class="${kind}">${escapeHtml(msg)}</span>`;
+    clearTimeout(window.__toastTimer);
+    window.__toastTimer = setTimeout(() => (t.style.display = "none"), 2600);
+  }
+
+  function escapeHtml(s){
+    return String(s ?? "").replace(/[&<>"']/g, m => ({
+      "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+    }[m]));
+  }
 
   function todayISO(){
     const d = new Date();
@@ -188,50 +247,178 @@
     return local.toISOString().slice(0,10);
   }
 
-  function load(){
-    try { return JSON.parse(localStorage.getItem(LS_KEY) || "[]"); }
-    catch { return []; }
-  }
-
-  function saveAll(){
-    localStorage.setItem(LS_KEY, JSON.stringify(state.entries));
-    render();
-  }
-
-  function uid(){
-    return Math.random().toString(36).slice(2) + Date.now().toString(36);
-  }
-
-  function formatType(t){
-    return t === "trade" ? "Сделка" : t === "market" ? "Анализ" : "Разбор";
-  }
-
-  function addEntry(){
-    const entry = {
-      id: uid(),
-      date: $("date").value || todayISO(),
-      type: $("type").value,
-      symbol: $("symbol").value.trim(),
-      setup: $("setup").value.trim(),
-      side: $("side").value,
-      risk: numOrNull($("risk").value),
-      resultR: numOrNull($("resultR").value),
-      emotion: $("emotion").value,
-      context: $("context").value.trim(),
-      lessons: $("lessons").value.trim(),
-      createdAt: new Date().toISOString()
-    };
-    state.entries.unshift(entry);
-    saveAll();
-    resetForm();
-  }
-
   function numOrNull(v){
     if (v === "" || v == null) return null;
     const n = Number(v);
     return Number.isFinite(n) ? n : null;
   }
 
+  function formatType(t){
+    return t === "trade" ? "Сделка" : t === "market" ? "Анализ" : "Разбор";
+  }
+
+  function setFormEnabled(enabled){
+    const ids = ["date","type","symbol","setup","side","risk","resultR","emotion","context","lessons","saveBtn","resetBtn"];
+    ids.forEach(id => $(id).disabled = !enabled);
+  }
+
+  // =========================
+  // 3) STATE
+  // =========================
+  const state = {
+    entries: [],
+    filterType: "",
+    q: ""
+  };
+
+  let currentUser = null;
+
+  // =========================
+  // 4) AUTH
+  // =========================
+  async function refreshAuth(){
+    const { data, error } = await supabase.auth.getUser();
+    if (error) {
+      currentUser = null;
+      $("authState").innerHTML = `<span class="bad">Ошибка auth:</span> ${escapeHtml(error.message)}`;
+      setFormEnabled(false);
+      return;
+    }
+
+    currentUser = data.user || null;
+
+    if (currentUser) {
+      $("authState").innerHTML = `✅ <span class="ok">Вход выполнен:</span> ${escapeHtml(currentUser.email)}`;
+      setFormEnabled(true);
+      $("logoutBtn").disabled = false;
+    } else {
+      $("authState").innerHTML = `⚠️ <span class="warn">Не авторизован.</span> Войди или зарегистрируйся.`;
+      setFormEnabled(false);
+      $("logoutBtn").disabled = true;
+    }
+  }
+
+  async function login(){
+    const email = $("email").value.trim();
+    const password = $("password").value;
+    if(!email || !password) { toast("Заполни email и пароль", "warn"); return; }
+
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) { toast(error.message, "bad"); return; }
+
+    await refreshAuth();
+    await loadFromDB();
+    toast("Вход выполнен", "ok");
+  }
+
+  async function signup(){
+    const email = $("email").value.trim();
+    const password = $("password").value;
+    if(!email || !password) { toast("Заполни email и пароль", "warn"); return; }
+
+    const { error } = await supabase.auth.signUp({ email, password });
+    if (error) { toast(error.message, "bad"); return; }
+
+    // В зависимости от настроек email confirmation, пользователь может быть не залогинен сразу
+    await refreshAuth();
+    await loadFromDB();
+    toast("Регистрация создана. Если включено подтверждение email — проверь почту.", "ok");
+  }
+
+  async function logout(){
+    await supabase.auth.signOut();
+    await refreshAuth();
+    state.entries = [];
+    render();
+    toast("Выход выполнен", "ok");
+  }
+
+  // =========================
+  // 5) DB (entries)
+  // =========================
+  function mapFromDB(x){
+    return {
+      id: x.id,
+      date: x.date,
+      type: x.type,
+      symbol: x.symbol || "",
+      setup: x.setup || "",
+      side: x.side || "",
+      risk: x.risk,
+      resultR: x.result_r,
+      emotion: x.emotion || "",
+      context: x.context || "",
+      lessons: x.lessons || "",
+      createdAt: x.created_at
+    };
+  }
+
+  async function loadFromDB(){
+    if(!currentUser){
+      $("listState").textContent = "Нет данных: нужно войти.";
+      state.entries = [];
+      render();
+      return;
+    }
+
+    $("listState").textContent = "Загрузка…";
+
+    const { data, error } = await supabase
+      .from("entries")
+      .select("*")
+      .order("date", { ascending: false })
+      .order("created_at", { ascending: false });
+
+    if (error){
+      $("listState").innerHTML = `<span class="bad">Ошибка загрузки:</span> ${escapeHtml(error.message)}`;
+      state.entries = [];
+      render();
+      return;
+    }
+
+    state.entries = (data || []).map(mapFromDB);
+    $("listState").textContent = `Загружено записей: ${state.entries.length}`;
+    render();
+  }
+
+  async function insertToDB(entry){
+    if(!currentUser){
+      toast("Сначала войди, чтобы сохранять в БД", "warn");
+      return false;
+    }
+
+    const payload = {
+      user_id: currentUser.id,
+      date: entry.date,
+      type: entry.type,
+      symbol: entry.symbol || null,
+      setup: entry.setup || null,
+      side: entry.side || null,
+      risk: entry.risk,
+      result_r: entry.resultR,
+      emotion: entry.emotion || null,
+      context: entry.context || null,
+      lessons: entry.lessons || null
+    };
+
+    const { error } = await supabase.from("entries").insert(payload);
+    if (error){
+      toast("Ошибка сохранения: " + error.message, "bad");
+      return false;
+    }
+
+    return true;
+  }
+
+  async function deleteFromDB(id){
+    if(!currentUser) return;
+    const { error } = await supabase.from("entries").delete().eq("id", id);
+    if (error) toast("Ошибка удаления: " + error.message, "bad");
+  }
+
+  // =========================
+  // 6) UI LOGIC
+  // =========================
   function resetForm(){
     $("date").value = todayISO();
     $("type").value = "trade";
@@ -245,42 +432,8 @@
     $("lessons").value = "";
   }
 
-  function del(id){
-    state.entries = state.entries.filter(e => e.id !== id);
-    saveAll();
-  }
-
-  function exportJSON(){
-    const blob = new Blob([JSON.stringify(state.entries, null, 2)], {type:"application/json"});
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `trading-journal-${todayISO()}.json`;
-    a.click();
-    URL.revokeObjectURL(a.href);
-  }
-
-  function importJSON(file){
-    const reader = new FileReader();
-    reader.onload = () => {
-      try{
-        const data = JSON.parse(reader.result);
-        if(!Array.isArray(data)) throw new Error("Not array");
-        // merge by id
-        const map = new Map(state.entries.map(e => [e.id, e]));
-        data.forEach(e => {
-          if (e && e.id) map.set(e.id, e);
-        });
-        state.entries = Array.from(map.values()).sort((a,b)=> (b.date||"").localeCompare(a.date||""));
-        saveAll();
-      }catch(err){
-        alert("Ошибка импорта JSON. Проверь файл.");
-      }
-    };
-    reader.readAsText(file);
-  }
-
   function filtered(){
-    const q = state.q.toLowerCase();
+    const q = state.q.trim().toLowerCase();
     return state.entries.filter(e => {
       const okType = !state.filterType || e.type === state.filterType;
       const hay = [
@@ -294,9 +447,9 @@
   function render(){
     // KPI
     const trades = state.entries.filter(e => e.type === "trade");
-    const totalR = trades.reduce((s,e)=> s + (e.resultR || 0), 0);
-    const wins = trades.filter(e => (e.resultR || 0) > 0).length;
-    const losses = trades.filter(e => (e.resultR || 0) < 0).length;
+    const totalR = trades.reduce((s,e)=> s + (Number(e.resultR) || 0), 0);
+    const wins = trades.filter(e => (Number(e.resultR) || 0) > 0).length;
+    const losses = trades.filter(e => (Number(e.resultR) || 0) < 0).length;
     const winrate = trades.length ? Math.round((wins / trades.length) * 100) : 0;
 
     const kpi = [
@@ -306,59 +459,4 @@
       {k:"Суммарно R", v: (Math.round(totalR*10)/10).toString()}
     ];
 
-    $("kpi").innerHTML = kpi.map(x => `
-      <div class="box">
-        <div class="muted">${x.k}</div>
-        <div class="v">${x.v}</div>
-      </div>
-    `).join("");
-
-    // rows
-    const rows = filtered();
-    $("rows").innerHTML = rows.map(e => `
-      <tr>
-        <td>${e.date || ""}</td>
-        <td><span class="tag">${formatType(e.type)}</span></td>
-        <td>
-          <div class="pill">
-            <strong>${escapeHtml(e.symbol || "—")}</strong>
-            ${e.side ? `<span class="tag">${e.side.toUpperCase()}</span>` : ""}
-            ${e.setup ? `<span class="tag">${escapeHtml(e.setup)}</span>` : ""}
-          </div>
-          <div class="muted" style="margin-top:6px;">
-            ${escapeHtml((e.context || e.lessons || "").slice(0, 180))}${(e.context||e.lessons||"").length>180?"…":""}
-          </div>
-        </td>
-        <td class="right">${e.type==="trade" ? (e.resultR ?? "—") : "—"}</td>
-        <td>
-          <button onclick="window.__del('${e.id}')">Удалить</button>
-        </td>
-      </tr>
-    `).join("");
-  }
-
-  function escapeHtml(s){
-    return String(s).replace(/[&<>"']/g, m => ({
-      "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
-    }[m]));
-  }
-
-  window.__del = del;
-
-  // init
-  $("date").value = todayISO();
-  $("save").addEventListener("click", addEntry);
-  $("reset").addEventListener("click", resetForm);
-  $("export").addEventListener("click", exportJSON);
-  $("importBtn").addEventListener("click", () => $("importFile").click());
-  $("importFile").addEventListener("change", (e) => {
-    if (e.target.files && e.target.files[0]) importJSON(e.target.files[0]);
-    e.target.value = "";
-  });
-  $("q").addEventListener("input", (e)=>{ state.q = e.target.value; render(); });
-  $("filterType").addEventListener("change", (e)=>{ state.filterType = e.target.value; render(); });
-
-  render();
-</script>
-</body>
-</html>
+    $("kpi").innerHTML = kpi.map(x =>
