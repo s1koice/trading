@@ -3,6 +3,12 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
+
+  <!-- Анти-кэш подсказки (не всегда помогают GH Pages, но не мешают) -->
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+
   <title>Trading Journal</title>
 
   <style>
@@ -10,7 +16,8 @@
     body { margin: 0; background:#0b0f19; color:#e7eaf3; }
     header { padding: 18px 16px; border-bottom: 1px solid #1b2440; position: sticky; top:0; background:#0b0f19; z-index: 5; }
     h1 { margin: 0 0 6px; font-size: 18px; }
-    .sub { color:#aab3d3; font-size: 13px; }
+    .sub { color:#aab3d3; font-size: 13px; display:flex; gap:10px; flex-wrap: wrap; align-items:center; }
+    .badge { display:inline-block; padding: 2px 10px; border-radius: 999px; border:1px solid #223057; background:#0b1020; color:#cfd6f5; font-size: 12px; }
 
     main { max-width: 1150px; margin: 0 auto; padding: 16px; display: grid; gap: 16px; grid-template-columns: 380px 1fr; }
     .card { background:#0f1629; border:1px solid #1b2440; border-radius: 16px; padding: 14px; }
@@ -48,7 +55,7 @@
     .divider { border:none; border-top:1px solid #1b2440; margin:14px 0; }
 
     .toast {
-      position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%);
+      position: fixed; left: 50%; bottom: 62px; transform: translateX(-50%);
       background: #0b1020; border:1px solid #223057; border-radius: 14px; padding: 10px 12px;
       min-width: 260px; max-width: 92vw; display:none; z-index: 9999;
     }
@@ -56,17 +63,30 @@
     .warn { color:#fbbf24; }
     .bad { color:#fb7185; }
 
-    /* Debug bar */
-    .debugbar {
-      position: fixed; top: 0; left: 0; right: 0; z-index: 9998;
-      padding: 10px 12px; background:#0b1020; border-bottom:1px solid #223057;
-      font: 14px system-ui; color:#e7eaf3;
-    }
     .debugbox {
       margin-top: 10px; padding: 10px 12px; border-radius: 14px;
       background:#0b1020; border:1px solid #223057;
       max-height: 220px; overflow:auto; white-space: pre-wrap; word-break: break-word;
       font-size: 12px;
+    }
+
+    /* Видимая версия (HTML) — всегда на экране */
+    .versionbar{
+      position: fixed; left: 10px; bottom: 10px; z-index: 9998;
+      padding: 8px 10px; border-radius: 12px;
+      background:#0b1020; border:1px solid #223057;
+      color:#cfd6f5; font-size: 12px;
+      opacity: 0.92;
+    }
+
+    .noscript{
+      margin: 12px 0;
+      padding: 10px 12px;
+      border-radius: 14px;
+      background:#2a1b1b;
+      border:1px solid #7a2d2d;
+      color:#ffd4d4;
+      font-size: 13px;
     }
 
     @media (max-width: 980px){
@@ -79,18 +99,30 @@
   <script
     src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"
     onload="window.__SB_OK=true;"
-    onerror="window.__SB_OK=false;alert('❌ Не загрузился Supabase JS (CDN). Отключи AdBlock/фильтры или дай знать — сделаю версию без CDN.');">
+    onerror="window.__SB_OK=false;">
   </script>
 </head>
 
 <body>
 <header>
   <h1>Trading Journal</h1>
-  <div class="sub">Журнал сделок + анализ рынка — сохранение в базе данных (Supabase Postgres)</div>
+  <div class="sub">
+    <span>Журнал сделок + анализ рынка — сохранение в базе данных (Supabase Postgres)</span>
+    <span class="badge" id="versionBadge">Версия: v2025-12-27 23:59 (IL)</span>
+    <span class="badge" id="sbBadge">Supabase: …</span>
+    <span class="badge" id="jsBadge">JS: …</span>
+  </div>
 </header>
 
 <main>
   <section class="card">
+    <noscript>
+      <div class="noscript">
+        ❌ У тебя отключён JavaScript. Поэтому кнопки не будут работать.
+        Включи JS в браузере.
+      </div>
+    </noscript>
+
     <h2>🔐 Аккаунт</h2>
 
     <label>Email</label>
@@ -186,7 +218,7 @@
       ⚠️ Сначала <b>войти</b> или <b>зарегистрироваться</b>. Иначе запись не сохранится.
     </p>
 
-    <div class="debugbox" id="debugLog"></div>
+    <div class="debugbox" id="debugLog">Debug log появится здесь…</div>
   </section>
 
   <section class="card">
@@ -228,9 +260,17 @@
   </section>
 </main>
 
+<!-- ВИДИМАЯ ВЕРСИЯ (HTML) — даже если JS не работает -->
+<div class="versionbar">Trading Journal · <b>v2025-12-27 23:59 (IL)</b></div>
+
 <div class="toast" id="toast"></div>
 
 <script>
+  // =========================
+  // УНИКАЛЬНАЯ ВЕРСИЯ ПРАВКИ
+  // =========================
+  const APP_VERSION = "v2025-12-27 23:59 (IL)";
+
   // =========================
   // CONFIG (твои данные)
   // =========================
@@ -248,10 +288,15 @@
     }[m]));
   }
 
+  function setBadge(id, text){
+    const el = $(id);
+    if (el) el.textContent = text;
+  }
+
   function log(msg){
     const box = $("debugLog");
     const t = new Date().toLocaleTimeString();
-    box.textContent = `[${t}] ${msg}\n` + box.textContent;
+    box.textContent = `[${t}] ${msg}\n` + (box.textContent || "");
   }
 
   function toast(msg, kind="ok"){
@@ -259,7 +304,7 @@
     el.style.display = "block";
     el.innerHTML = `<span class="${kind}">${escapeHtml(msg)}</span>`;
     clearTimeout(window.__toastTimer);
-    window.__toastTimer = setTimeout(()=> el.style.display="none", 2800);
+    window.__toastTimer = setTimeout(()=> el.style.display="none", 2600);
   }
 
   function todayISO(){
@@ -281,28 +326,20 @@
 
   function setFormEnabled(enabled){
     const ids = ["date","type","symbol","setup","side","risk","resultR","emotion","context","lessons","saveBtn","resetBtn"];
-    ids.forEach(id => $(id).disabled = !enabled);
-  }
-
-  // =========================
-  // DEBUG BAR (видно всегда)
-  // =========================
-  function addDebugBar(){
-    const bar = document.createElement("div");
-    bar.className = "debugbar";
-    const sb = window.__SB_OK ? "OK" : "НЕ ЗАГРУЖЕН";
-    bar.innerHTML = `✅ JS работает. Supabase: <b>${sb}</b> · <span class="muted">Если кнопки не реагируют — значит JS не выполняется или файл не обновился.</span>`;
-    document.body.appendChild(bar);
-    document.body.style.paddingTop = "44px";
+    ids.forEach(id => { const el = $(id); if (el) el.disabled = !enabled; });
   }
 
   // =========================
   // SUPABASE INIT
   // =========================
-  const SB = window.supabase;
   let supabase = null;
-  if (SB && SB.createClient) {
-    supabase = SB.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  try{
+    const SB = window.supabase;
+    if (SB && SB.createClient) {
+      supabase = SB.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    }
+  } catch(e){
+    supabase = null;
   }
 
   // =========================
@@ -316,10 +353,11 @@
   // =========================
   async function refreshAuth(){
     if(!supabase){
-      $("authState").innerHTML = `❌ <span class="bad">Supabase JS не инициализирован.</span>`;
+      $("authState").innerHTML = `❌ <span class="bad">Supabase не загрузился/заблокирован.</span>`;
+      setBadge("sbBadge", "Supabase: НЕ ЗАГРУЖЕН");
       setFormEnabled(false);
       $("logoutBtn").disabled = true;
-      log("Supabase не инициализирован (supabase == null).");
+      log("supabase == null. Возможно AdBlock/фильтр блокирует jsdelivr.");
       return;
     }
 
@@ -332,7 +370,7 @@
         $("authState").innerHTML = `✅ <span class="ok">Вход:</span> ${escapeHtml(currentUser.email)}`;
         $("logoutBtn").disabled = false;
         setFormEnabled(true);
-        log("Auth OK: user=" + currentUser.email);
+        log("Auth OK: " + currentUser.email);
       } else {
         $("authState").innerHTML = `⚠️ <span class="warn">Не авторизован.</span> Войди или зарегистрируйся.`;
         $("logoutBtn").disabled = true;
@@ -348,19 +386,17 @@
   }
 
   async function login(){
-    toast("Клик: Войти", "warn");
-    log("Нажали Войти.");
+    toast("Нажал: Войти", "warn");
+    log("Click: login");
 
     if(!supabase){
-      alert("Supabase не загрузился (CDN/AdBlock).");
+      alert("Supabase не загрузился (скорее всего блокируется CDN).");
       return;
     }
-
     const email = $("email").value.trim();
     const password = $("password").value;
     if(!email || !password){
       toast("Заполни email и пароль", "warn");
-      log("Пустой email/пароль.");
       return;
     }
 
@@ -370,31 +406,28 @@
       if(error) throw error;
 
       toast("Вход выполнен", "ok");
-      log("Вход OK.");
       await refreshAuth();
       await loadFromDB();
     } catch(e){
       toast(e.message || "Ошибка входа", "bad");
-      log("Ошибка входа: " + (e.message || e));
+      log("Login error: " + (e.message || e));
     } finally {
       $("loginBtn").disabled = false;
     }
   }
 
   async function signup(){
-    toast("Клик: Регистрация", "warn");
-    log("Нажали Регистрация.");
+    toast("Нажал: Регистрация", "warn");
+    log("Click: signup");
 
     if(!supabase){
-      alert("Supabase не загрузился (CDN/AdBlock).");
+      alert("Supabase не загрузился (скорее всего блокируется CDN).");
       return;
     }
-
     const email = $("email").value.trim();
     const password = $("password").value;
     if(!email || !password){
       toast("Заполни email и пароль", "warn");
-      log("Пустой email/пароль.");
       return;
     }
 
@@ -403,34 +436,33 @@
       const { data, error } = await supabase.auth.signUp({ email, password });
       if(error) throw error;
 
-      toast("Регистрация создана. Если надо — проверь почту.", "ok");
+      toast("Регистрация создана. Если нужно — проверь почту.", "ok");
       log("Signup OK. user=" + (data?.user?.email || "null (может требовать подтверждение)"));
-
       await refreshAuth();
       await loadFromDB();
     } catch(e){
       toast(e.message || "Ошибка регистрации", "bad");
-      log("Ошибка регистрации: " + (e.message || e));
+      log("Signup error: " + (e.message || e));
     } finally {
       $("signupBtn").disabled = false;
     }
   }
 
   async function logout(){
-    toast("Клик: Выйти", "warn");
-    log("Нажали Выйти.");
-
+    toast("Нажал: Выйти", "warn");
+    log("Click: logout");
     if(!supabase) return;
+
     try{
       await supabase.auth.signOut();
+      currentUser = null;
       state.entries = [];
       render();
       await refreshAuth();
       toast("Выход выполнен", "ok");
-      log("Выход OK.");
     } catch(e){
       toast(e.message || "Ошибка выхода", "bad");
-      log("Ошибка выхода: " + (e.message || e));
+      log("Logout error: " + (e.message || e));
     }
   }
 
@@ -489,7 +521,6 @@
   async function insertToDB(entry){
     if(!currentUser){
       toast("Сначала войди", "warn");
-      log("insertToDB: user=null");
       return false;
     }
 
@@ -513,7 +544,6 @@
       log("insertToDB error: " + error.message);
       return false;
     }
-    log("insertToDB OK");
     return true;
   }
 
@@ -524,7 +554,6 @@
       log("deleteFromDB error: " + error.message);
       return false;
     }
-    log("deleteFromDB OK");
     return true;
   }
 
@@ -590,7 +619,7 @@
           </div>
         </td>
         <td class="right">${e.type==="trade" ? escapeHtml(e.resultR ?? "—") : "—"}</td>
-        <td><button onclick="window.__del('${e.id}')">Удалить</button></td>
+        <td><button type="button" onclick="window.__del('${e.id}')">Удалить</button></td>
       </tr>
     `).join("");
 
@@ -600,8 +629,8 @@
   }
 
   async function addEntry(){
-    toast("Клик: Сохранить", "warn");
-    log("Нажали Сохранить.");
+    toast("Нажал: Сохранить", "warn");
+    log("Click: save");
 
     const entry = {
       date: $("date").value || todayISO(),
@@ -618,7 +647,6 @@
 
     if(entry.type === "trade" && !entry.symbol){
       toast("Для сделки укажи инструмент", "warn");
-      log("Валидация: пустой symbol.");
       return;
     }
 
@@ -644,27 +672,32 @@
   // INIT
   // =========================
   document.addEventListener("DOMContentLoaded", async () => {
-    addDebugBar();
-    $("date").value = todayISO();
-    setFormEnabled(false);
-    $("logoutBtn").disabled = true;
-    log("DOMContentLoaded: JS запустился.");
+    // Обновим бейджи
+    setBadge("versionBadge", "Версия: " + APP_VERSION);
+    setBadge("jsBadge", "JS: OK");
+    setBadge("sbBadge", "Supabase: " + (window.__SB_OK ? "OK" : "НЕ ЗАГРУЖЕН"));
 
-    // ВАЖНО: эти обработчики должны дать реакцию всегда
+    $("date").value = todayISO();
+    $("debugLog").textContent = "";
+    log("DOMContentLoaded: JS запустился. Версия " + APP_VERSION);
+
+    // КНОПКИ — обязаны реагировать
     $("loginBtn").addEventListener("click", login);
     $("signupBtn").addEventListener("click", signup);
     $("logoutBtn").addEventListener("click", logout);
-    $("reloadBtn").addEventListener("click", () => { toast("Клик: Обновить", "warn"); loadFromDB(); });
+    $("reloadBtn").addEventListener("click", () => { toast("Нажал: Обновить", "warn"); loadFromDB(); });
     $("saveBtn").addEventListener("click", addEntry);
-    $("resetBtn").addEventListener("click", () => { toast("Форма очищена", "ok"); resetForm(); });
+    $("resetBtn").addEventListener("click", () => { resetForm(); toast("Очищено", "ok"); });
 
     $("q").addEventListener("input", (e)=>{ state.q = e.target.value; render(); });
     $("filterType").addEventListener("change", (e)=>{ state.filterType = e.target.value; render(); });
 
-    // Базовая проверка supabase
+    // Если supabase не поднялся — покажем это сразу
     if(!supabase){
-      $("authState").innerHTML = `❌ <span class="bad">Supabase JS не инициализирован.</span> Скорее всего блокируется CDN.`;
-      log("supabase == null (CDN blocked?)");
+      $("authState").innerHTML = `❌ <span class="bad">Supabase не инициализирован.</span> Возможно блокируется CDN jsdelivr.`;
+      setFormEnabled(false);
+      $("logoutBtn").disabled = true;
+      log("supabase == null. Проверь AdBlock/фильтры/корп сеть.");
       return;
     }
 
