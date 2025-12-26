@@ -1,258 +1,444 @@
-<!doctype html>
-<html lang="ru">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Trading Journal</title>
+/* =========================================================
+   Trading Journal – app.js (FULL, SAFE BINDINGS)
+   Version: v2025-12-28 02:10 (IL)
+   ========================================================= */
 
-  <style>
-    :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; }
-    body { margin: 0; background:#0b0f19; color:#e7eaf3; }
+const APP_VERSION = "v2025-12-28 02:10 (IL)";
 
-    header {
-      padding: 18px 16px;
-      border-bottom: 1px solid #1b2440;
-      background:#0b0f19;
-      position: sticky;
-      top:0;
-      z-index: 10;
-    }
-    h1 { margin: 0 0 6px; font-size: 18px; }
-    .sub { display:flex; gap:10px; flex-wrap: wrap; }
-    .badge {
-      display:inline-block;
-      padding: 4px 10px;
-      border-radius: 999px;
-      border:1px solid #223057;
-      background:#0b1020;
-      font-size: 12px;
-      color:#cfd6f5;
-    }
+// ---------- helpers ----------
+const $ = (id) => document.getElementById(id);
 
-    /* ВАЖНО: main ВСЕГДА видим */
-    main {
-      display: grid !important;
-      grid-template-columns: 380px 1fr;
-      gap: 16px;
-      max-width: 1150px;
-      margin: 0 auto;
-      padding: 16px;
-      min-height: 60vh;
-    }
-    @media (max-width: 980px){
-      main { grid-template-columns: 1fr; }
-    }
+function setText(id, text) {
+  const el = $(id);
+  if (el) el.textContent = text;
+}
 
-    .card {
-      background:#0f1629;
-      border:1px solid #1b2440;
-      border-radius: 16px;
-      padding: 14px;
-      overflow: visible;
-    }
-    .card h2 { margin: 0 0 10px; font-size: 14px; color:#cfd6f5; }
-    .muted { color:#aab3d3; font-size: 12px; }
+function clearLog() {
+  const box = $("debugLog");
+  if (box) box.textContent = "";
+}
 
-    label { display:block; font-size: 12px; color:#aab3d3; margin: 10px 0 6px; }
-    input, select, textarea, button {
-      width: 100%;
-      box-sizing: border-box;
-      border-radius: 12px;
-      border: 1px solid #223057;
-      background:#0b1020;
-      color:#e7eaf3;
-      padding: 10px 12px;
-      font-size: 14px;
-    }
-    textarea { min-height: 88px; resize: vertical; }
-    button { cursor:pointer; background:#111a33; border:1px solid #2d3d6f; }
-    button:disabled { opacity: .6; cursor: not-allowed; }
+function log(msg) {
+  const box = $("debugLog");
+  if (!box) return;
+  const t = new Date().toLocaleTimeString();
+  box.textContent = `[${t}] ${msg}\n` + box.textContent;
+}
 
-    .row { display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
-    .row3 { display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px; }
-    .btnRow { display:flex; gap:10px; }
-    .btnRow button { flex:1; }
+function toast(msg) {
+  const el = $("toast");
+  if (!el) return;
+  el.style.display = "block";
+  el.textContent = msg;
+  clearTimeout(window.__toastTimer);
+  window.__toastTimer = setTimeout(() => (el.style.display = "none"), 2000);
+}
 
-    .kpi { display:grid; grid-template-columns: repeat(4, 1fr); gap:10px; }
-    .kpi .box { background:#0b1020; border:1px solid #223057; border-radius: 14px; padding: 10px; }
-    .kpi .v { font-size: 18px; margin-top:4px; }
+function todayISO() {
+  const d = new Date();
+  const off = d.getTimezoneOffset();
+  return new Date(d.getTime() - off * 60000).toISOString().slice(0, 10);
+}
 
-    /* TABLE FIX */
-    table {
-      width:100%;
-      border-collapse: separate;
-      border-spacing: 0;
-      overflow:hidden;
-      border-radius: 14px;
-      border:1px solid #1b2440;
-    }
-    thead th{
-      background:#0b1020;
-      color:#cfd6f5;
-      font-size: 13px;
-      padding: 12px;
-      border-bottom:1px solid #1b2440;
-      text-align:left;
-      white-space: nowrap;
-    }
-    td{
-      padding: 14px 12px;
-      vertical-align: top;
-      font-size: 13px;
-      line-height: 1.45; /* ключ */
-      border-bottom:1px solid #1b2440;
-    }
-    tr:hover td { background:#0b1020; }
-    .right { text-align:right; }
+function numOrNull(v) {
+  if (v === "" || v == null) return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
 
-    .tag {
-      display:inline-block;
-      padding: 2px 8px;
-      border-radius: 999px;
-      border:1px solid #223057;
-      font-size: 12px;
-      color:#cfd6f5;
-      white-space: nowrap;
-    }
-    .pill { display:inline-flex; gap:8px; align-items:center; flex-wrap: wrap; }
+function escapeHtml(s) {
+  return String(s ?? "").replace(/[&<>"']/g, (m) => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+  }[m]));
+}
 
-    .debugbox {
-      margin-top: 10px;
-      padding: 10px 12px;
-      border-radius: 14px;
-      background:#0b1020;
-      border:1px solid #223057;
-      max-height: 220px;
-      overflow:auto;
-      white-space: pre-wrap;
-      word-break: break-word;
-      font-size: 12px;
-    }
+function formatType(t) {
+  return t === "trade" ? "Сделка" : t === "market" ? "Анализ" : "Разбор";
+}
 
-    .toast {
-      position: fixed;
-      left: 50%;
-      bottom: 62px;
-      transform: translateX(-50%);
-      background: #0b1020;
-      border:1px solid #223057;
-      border-radius: 14px;
-      padding: 10px 12px;
-      min-width: 260px;
-      max-width: 92vw;
-      display:none;
-      z-index: 9999;
-    }
+// ---------- global error capture (чтобы видеть в debug) ----------
+window.addEventListener("error", (e) => {
+  log("❌ JS error: " + (e.message || e));
+});
+window.addEventListener("unhandledrejection", (e) => {
+  log("❌ Promise error: " + (e.reason?.message || e.reason || e));
+});
 
-    /* Аварийное сообщение если JS не стартанул */
-    #jsFail {
-      margin-top: 10px;
-      padding: 10px 12px;
-      border-radius: 14px;
-      border:1px solid #5a2a2a;
-      background:#1a0f12;
-      color:#ffb6b6;
-      font-size: 12px;
-    }
-  </style>
+// ---------- Supabase ----------
+let sb = null;
+let currentUser = null;
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js" defer></script>
-  <script src="./app.js" defer></script>
-</head>
+const SUPABASE_URL = "https://lchstbkuizgablzdczgf.supabase.co";
+const SUPABASE_ANON_KEY =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxjaHN0Ymt1aXpnYWJsemRjemdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY3NzE2MDQsImV4cCI6MjA4MjM0NzYwNH0.0HnmhHZSDNktliI1ieg7F_ehVuvDp3nwh8vhFJM6eRg";
 
-<body>
-<header>
-  <h1>Trading Journal</h1>
-  <div class="sub">
-    <span class="badge" id="versionBadge">Версия: …</span>
-    <span class="badge" id="sbBadge">Supabase: …</span>
-    <span class="badge" id="jsBadge">JS: …</span>
-  </div>
-</header>
+try {
+  if (window.supabase?.createClient) {
+    sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  }
+} catch (e) {
+  sb = null;
+}
 
-<main id="main">
-  <section class="card">
-    <h2>🔐 Аккаунт</h2>
+// ---------- state ----------
+const state = {
+  entries: [],
+  q: "",
+  filterType: ""
+};
 
-    <label>Email</label>
-    <input id="email" autocomplete="email" />
+// ---------- auth render ----------
+function renderAuth() {
+  if (!sb) {
+    setText("sbBadge", "Supabase: ❌");
+    setText("authState", "Supabase не загрузился");
+    return;
+  }
 
-    <label>Пароль</label>
-    <input id="password" type="password" autocomplete="current-password" />
+  setText("sbBadge", "Supabase: OK");
 
-    <div class="btnRow" style="margin-top:10px;">
-      <button id="loginBtn" type="button">Войти</button>
-      <button id="signupBtn" type="button">Регистрация</button>
-    </div>
+  if (currentUser) {
+    setText("authState", `Вход: ${currentUser.email}`);
+  } else {
+    setText("authState", "Не авторизован");
+  }
+}
 
-    <div class="btnRow" style="margin-top:10px;">
-      <button id="logoutBtn" type="button">Выйти</button>
-      <button id="reloadBtn" type="button">Обновить записи</button>
-    </div>
+// ---------- UI bind (самое важное) ----------
+function bindButton(id, handlerName, handlerFn) {
+  const el = $(id);
+  if (!el) {
+    log(`⚠️ Не найден элемент #${id} (не могу повесить ${handlerName})`);
+    return;
+  }
 
-    <div class="muted" id="authState" style="margin-top:10px;">—</div>
+  // снимаем прошлые (если были)
+  el.onclick = null;
 
-    <div id="jsFail">
-      Если ты видишь это сообщение и кнопки не работают — значит JS не запустился.
-      Проверь Console (F12) на ошибки.
-    </div>
+  el.addEventListener("click", (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    handlerFn();
+  }, { once: false });
 
-    <div class="debugbox" id="debugLog">Debug log: ожидаю запуск app.js…</div>
-  </section>
+  log(`✅ Привязал ${handlerName} → #${id}`);
+}
 
-  <section class="card">
-    <h2>📊 Дашборд</h2>
-    <div class="kpi" id="kpi"></div>
+function bindUI() {
+  // Биндим кнопки железно
+  bindButton("loginBtn", "login()", login);
+  bindButton("signupBtn", "signup()", signup);
+  bindButton("logoutBtn", "logout()", logout);
+  bindButton("saveBtn", "saveEntry()", saveEntry);
+  bindButton("resetBtn", "resetForm()", () => { resetForm(); toast("Очищено"); });
+  bindButton("reloadBtn", "loadFromDB()", loadFromDB);
 
-    <div class="row" style="margin-top:12px;">
-      <div>
-        <label>Поиск</label>
-        <input id="q" placeholder="BTC / breakout / ошибки..." />
+  const q = $("q");
+  if (q) {
+    q.oninput = (e) => { state.q = e.target.value; render(); };
+    log("✅ Привязал input → #q");
+  }
+
+  const ft = $("filterType");
+  if (ft) {
+    ft.onchange = (e) => { state.filterType = e.target.value; render(); };
+    log("✅ Привязал change → #filterType");
+  }
+}
+
+// ---------- DB ----------
+function mapFromDB(x) {
+  return {
+    id: x.id,
+    date: x.date,
+    type: x.type,
+    symbol: x.symbol || "",
+    setup: x.setup || "",
+    side: x.side || "",
+    risk: x.risk,
+    resultR: x.result_r,
+    emotion: x.emotion || "",
+    context: x.context || "",
+    lessons: x.lessons || "",
+    createdAt: x.created_at
+  };
+}
+
+async function loadFromDB() {
+  if (!currentUser) {
+    setText("listState", "Нужно войти.");
+    state.entries = [];
+    render();
+    return;
+  }
+
+  setText("listState", "Загрузка…");
+  log("loadFromDB: start");
+
+  const { data, error } = await sb
+    .from("entries")
+    .select("*")
+    .order("date", { ascending: false })
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    setText("listState", "Ошибка загрузки: " + error.message);
+    log("loadFromDB error: " + error.message);
+    return;
+  }
+
+  state.entries = (data || []).map(mapFromDB);
+  setText("listState", `Показано: ${filteredEntries().length} (всего: ${state.entries.length})`);
+  log("loadFromDB OK: " + state.entries.length);
+  render();
+}
+
+async function insertToDB(entry) {
+  const payload = {
+    user_id: currentUser.id,
+    date: entry.date,
+    type: entry.type,
+    symbol: entry.symbol || null,
+    setup: entry.setup || null,
+    side: entry.side || null,
+    risk: entry.risk,
+    result_r: entry.resultR,
+    emotion: entry.emotion || null,
+    context: entry.context || null,
+    lessons: entry.lessons || null
+  };
+
+  const { error } = await sb.from("entries").insert(payload);
+  if (error) {
+    toast("Ошибка сохранения: " + error.message);
+    log("insert error: " + error.message);
+    return false;
+  }
+  return true;
+}
+
+async function deleteFromDB(id) {
+  const { error } = await sb.from("entries").delete().eq("id", id);
+  if (error) {
+    toast("Ошибка удаления: " + error.message);
+    log("delete error: " + error.message);
+    return false;
+  }
+  return true;
+}
+
+// ---------- render ----------
+function filteredEntries() {
+  const q = (state.q || "").trim().toLowerCase();
+  return state.entries.filter((e) => {
+    const okType = !state.filterType || e.type === state.filterType;
+    const hay = [
+      e.date, e.type, e.symbol, e.setup, e.side, e.emotion, e.context, e.lessons
+    ].join(" ").toLowerCase();
+    const okQ = !q || hay.includes(q);
+    return okType && okQ;
+  });
+}
+
+function render() {
+  // KPI
+  const trades = state.entries.filter((e) => e.type === "trade");
+  const totalR = trades.reduce((s, e) => s + (Number(e.resultR) || 0), 0);
+  const wins = trades.filter((e) => (Number(e.resultR) || 0) > 0).length;
+  const winrate = trades.length ? Math.round((wins / trades.length) * 100) : 0;
+
+  const kpi = [
+    { k: "Всего записей", v: state.entries.length },
+    { k: "Сделок", v: trades.length },
+    { k: "Winrate", v: winrate + "%" },
+    { k: "Суммарно R", v: (Math.round(totalR * 10) / 10).toString() }
+  ];
+
+  const kpiEl = $("kpi");
+  if (kpiEl) {
+    kpiEl.innerHTML = kpi.map((x) => `
+      <div class="box">
+        <div class="muted">${escapeHtml(x.k)}</div>
+        <div class="v">${escapeHtml(x.v)}</div>
       </div>
-      <div>
-        <label>Фильтр типа</label>
-        <select id="filterType">
-          <option value="">Все</option>
-          <option value="trade">Сделка</option>
-          <option value="market">Анализ рынка</option>
-          <option value="review">Разбор дня</option>
-        </select>
-      </div>
-    </div>
+    `).join("");
+  }
 
-    <div class="muted" id="listState" style="margin-top:10px;">—</div>
+  // rows
+  const rows = filteredEntries();
+  const rowsEl = $("rows");
+  if (rowsEl) {
+    rowsEl.innerHTML = rows.map((e) => `
+      <tr>
+        <td>${escapeHtml(e.date || "")}</td>
+        <td><span class="tag">${escapeHtml(formatType(e.type))}</span></td>
+        <td>
+          <div class="pill">
+            <strong>${escapeHtml(e.symbol || "—")}</strong>
+            ${e.side ? `<span class="tag">${escapeHtml(e.side.toUpperCase())}</span>` : ""}
+            ${e.setup ? `<span class="tag">${escapeHtml(e.setup)}</span>` : ""}
+            ${e.emotion ? `<span class="tag">${escapeHtml(e.emotion)}</span>` : ""}
+          </div>
+          <div class="muted" style="margin-top:6px;">
+            ${escapeHtml((e.context || e.lessons || "").slice(0, 220))}${(e.context||e.lessons||"").length>220?"…":""}
+          </div>
+        </td>
+        <td class="right">${e.type === "trade" ? escapeHtml(e.resultR ?? "—") : "—"}</td>
+        <td><button type="button" data-del="${escapeHtml(e.id)}">Удалить</button></td>
+      </tr>
+    `).join("");
+  }
 
-    <div style="margin-top:12px; overflow:auto;">
-      <table>
-        <thead>
-          <tr>
-            <th style="width:110px;">Дата</th>
-            <th style="width:110px;">Тип</th>
-            <th>Содержание</th>
-            <th style="width:100px;" class="right">R</th>
-            <th style="width:140px;">Действия</th>
-          </tr>
-        </thead>
-        <tbody id="rows"></tbody>
-      </table>
-    </div>
-  </section>
-</main>
+  // bind delete
+  document.querySelectorAll("button[data-del]").forEach((btn) => {
+    btn.onclick = async () => {
+      const id = btn.getAttribute("data-del");
+      if (!confirm("Удалить запись?")) return;
+      toast("Удаляю…");
+      const ok = await deleteFromDB(id);
+      if (ok) await loadFromDB();
+    };
+  });
 
-<div class="toast" id="toast"></div>
+  const ls = $("listState");
+  if (ls && currentUser) {
+    ls.textContent = `Показано: ${rows.length} (всего: ${state.entries.length})`;
+  }
+}
 
-<script>
-  // Если app.js стартанёт — он поставит "JS: OK".
-  // Если через 1.5s не поменялось — покажем подсказку.
-  setTimeout(() => {
-    const js = document.getElementById("jsBadge");
-    if (js && !js.textContent.includes("OK")) {
-      // оставляем аварийное сообщение видимым
-    } else {
-      const fail = document.getElementById("jsFail");
-      if (fail) fail.style.display = "none";
-    }
-  }, 1500);
-</script>
-</body>
-</html>
+// ---------- form ----------
+function resetForm() {
+  const d = $("date"); if (d) d.value = todayISO();
+  const t = $("type"); if (t) t.value = "trade";
+  const s = $("symbol"); if (s) s.value = "";
+  const st = $("setup"); if (st) st.value = "";
+  const side = $("side"); if (side) side.value = "";
+  const risk = $("risk"); if (risk) risk.value = "";
+  const rr = $("resultR"); if (rr) rr.value = "";
+  const em = $("emotion"); if (em) em.value = "";
+  const c = $("context"); if (c) c.value = "";
+  const l = $("lessons"); if (l) l.value = "";
+}
+
+// ---------- actions ----------
+async function login() {
+  toast("Нажал: Войти");
+  log("Click login");
+
+  const email = $("email")?.value?.trim() || "";
+  const password = $("password")?.value || "";
+  if (!email || !password) return alert("Email и пароль обязательны");
+
+  const { error } = await sb.auth.signInWithPassword({ email, password });
+  if (error) {
+    alert(error.message);
+    log("Login error: " + error.message);
+  } else {
+    log("Login request OK (ждём auth event)");
+  }
+}
+
+async function signup() {
+  toast("Нажал: Регистрация");
+  log("Click signup");
+
+  const email = $("email")?.value?.trim() || "";
+  const password = $("password")?.value || "";
+  if (!email || !password) return alert("Email и пароль обязательны");
+
+  const { error } = await sb.auth.signUp({ email, password });
+  if (error) {
+    alert(error.message);
+    log("Signup error: " + error.message);
+  } else {
+    alert("Пользователь создан. Если включено подтверждение — проверь почту.");
+    log("Signup request OK");
+  }
+}
+
+async function logout() {
+  toast("Нажал: Выйти");
+  log("Click logout");
+  await sb.auth.signOut();
+}
+
+async function saveEntry() {
+  toast("Сохраняю…");
+  log("Click save");
+
+  if (!currentUser) {
+    toast("Сначала войди");
+    return;
+  }
+
+  const entry = {
+    date: $("date")?.value || todayISO(),
+    type: $("type")?.value || "trade",
+    symbol: ($("symbol")?.value || "").trim(),
+    setup: ($("setup")?.value || "").trim(),
+    side: $("side")?.value || null,
+    risk: numOrNull($("risk")?.value),
+    resultR: numOrNull($("resultR")?.value),
+    emotion: $("emotion")?.value || null,
+    context: ($("context")?.value || "").trim(),
+    lessons: ($("lessons")?.value || "").trim()
+  };
+
+  if (entry.type === "trade" && !entry.symbol) {
+    toast("Для сделки укажи инструмент");
+    return;
+  }
+
+  const ok = await insertToDB(entry);
+  if (ok) {
+    toast("Сохранено ✅");
+    resetForm();
+    await loadFromDB();
+  }
+}
+
+// ---------- init ----------
+document.addEventListener("DOMContentLoaded", async () => {
+  // шапка
+  setText("versionBadge", "Версия: " + APP_VERSION);
+  setText("jsBadge", "JS: OK");
+  setText("sbBadge", sb ? "Supabase: OK" : "Supabase: ❌");
+
+  clearLog();
+  log("app.js запущен: " + APP_VERSION);
+
+  // дата по умолчанию
+  if ($("date")) $("date").value = todayISO();
+
+  // биндим UI сразу и ещё раз через секунду (на случай кеша/дергания DOM)
+  bindUI();
+  setTimeout(bindUI, 800);
+
+  if (!sb) {
+    renderAuth();
+    return;
+  }
+
+  // auth events
+  sb.auth.onAuthStateChange((event, session) => {
+    log(`Auth event: ${event}`);
+    currentUser = session?.user || null;
+    renderAuth();
+    bindUI(); // ещё раз на всякий
+    if (currentUser) loadFromDB();
+    else { state.entries = []; render(); }
+  });
+
+  // стартовая сессия
+  const { data } = await sb.auth.getSession();
+  currentUser = data.session?.user || null;
+  renderAuth();
+
+  if (currentUser) {
+    log("Session OK: " + currentUser.email);
+    await loadFromDB();
+  } else {
+    log("Session: none");
+    render();
+  }
+});
